@@ -897,3 +897,56 @@ body.playing #btn-mute {
 #results-title {
 	font-size: 30px;
 }
+
+/* Keyboard hints: only on devices with a real mouse/keyboard. */
+.act .key {
+	display: none;
+	position: absolute;
+	bottom: -10px;
+	left: 50%;
+	transform: translateX(-50%);
+	background: var(--ink);
+	color: white;
+	font-size: 12px;
+	font-weight: 800;
+	padding: 2px 8px;
+	border-radius: 6px;
+	text-shadow: none;
+	white-space: nowrap;
+}
+
+@media (hover: hover) and (pointer: fine) {
+	.act .key {
+		display: block;
+	}
+}
+
+kbd {
+	display: inline-block;
+	min-width: 1.6em;
+	padding: 0 5px;
+	margin: 0 1px;
+	border-radius: 5px;
+	border: 1px solid #b9cfe0;
+	border-bottom-width: 3px;
+	background: white;
+	font:
+		800 13px ui-monospace,
+		Menlo,
+		monospace;
+	text-align: center;
+}
+
+/* A fresh power nudges you to use it. */
+.power.fresh {
+	animation: nudge 0.7s ease-in-out infinite alternate;
+}
+
+@keyframes nudge {
+	to {
+		transform: scale(1.12);
+		box-shadow:
+			0 5px 0 #1b6ea3,
+			0 0 0 8px rgba(92, 194, 255, 0.45);
+	}
+}

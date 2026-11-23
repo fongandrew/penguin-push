@@ -71,6 +71,9 @@ export function start() {
 	const solo = loadSolo();
 	const soloBotLooks = [0, 1, 2].map(() => randomLook(Math.random));
 	let lastCount = 99;
+	/** Power + uses last frame, to spot a fresh pick-up. */
+	let lastPower = '';
+	const finePointer = matchMedia('(hover: hover) and (pointer: fine)').matches;
 	let wentGo = false;
 	let announcedEnd = false;
 	const pendingRoom = normalizeCode(new URLSearchParams(location.search).get('room') ?? '');
@@ -569,8 +572,13 @@ export function start() {
 		if (cracking) banner.textContent = '🧊 The ice is cracking!';
 		const toast = $('toast');
 		if (state.toastMs > 0) {
-			if (toast.hidden || toast.textContent !== state.toast) {
-				toast.textContent = state.toast;
+			// On a keyboard, say which key uses the power.
+			const text =
+				finePointer && /Snowballs|Belly/.test(state.toast)
+					? `${state.toast} Press E`
+					: state.toast;
+			if (toast.hidden || toast.textContent !== text) {
+				toast.textContent = text;
 				toast.hidden = false;
 			}
 		} else toast.hidden = true;
@@ -579,6 +587,13 @@ export function start() {
 		$('btn-push').hidden = !me || me.mode === 'out' || state.mode !== 'play';
 		const pw = $('btn-power');
 		pw.hidden = !me || !me.power || me.mode === 'out' || state.mode !== 'play';
+		// Pulse the power button until the first use of each new power.
+		const powerKey = me && me.power ? `${me.power}:${me.uses}` : '';
+		if (powerKey !== lastPower) {
+			const fresh = !!me?.power && (!lastPower || lastPower.split(':')[0] !== me.power);
+			pw.classList.toggle('fresh', fresh);
+			lastPower = powerKey;
+		}
 		if (me && me.power) {
 			const icon = me.power === 'snowball' ? '❄️' : '🛷';
 			const ic = /** @type {HTMLElement} */ (pw.querySelector('.icon'));

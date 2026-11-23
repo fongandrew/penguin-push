@@ -14,12 +14,20 @@ export const MAX_LIVES = 9;
 export const PENGUIN_R = 0.42;
 /** Top walking speed, units/s. */
 export const WALK_SPEED = 4.4;
-/** How fast a penguin reaches walking speed (units/s²). Ice: not instant. */
-export const WALK_ACCEL = 20;
-/** Velocity damping per second when nobody's steering. Low = slippery. */
+/** How fast a penguin reaches walking speed (units/s²). */
+export const WALK_ACCEL = 34;
+/** Grip when you're walking or standing: let go and you stop in ~0.3 s. */
+export const GRIP_DRAG = 9;
+/** Sideways grip while steering, so turns are tight (per second). */
+export const TURN_GRIP = 10;
+/** Drag while you've been shoved and are sliding faster than you can walk. */
 export const ICE_DRAG = 2.4;
-/** Even slipperier on the shiny patches. */
-export const SLICK_DRAG = 0.5;
+/** Polished tiles: properly slippery. */
+export const SLICK_DRAG = 0.9;
+/** Stick directions this close to a grid axis snap to it (radians). */
+export const AXIS_SNAP = 0.25;
+/** How firmly walking straight centres you in your row/column. */
+export const LANE_ASSIST = 5;
 /** How long a knock leaves you mostly out of control, ms. */
 export const KNOCK_MS = 420;
 

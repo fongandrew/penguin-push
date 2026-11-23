@@ -3,17 +3,30 @@
  * the fall-in / drop-back-in cycle. Pure apart from mutating the penguin.
  */
 
-import { floeAt, heightAt, pushOutOfBlocks, respawnSpot, supportAt } from './arena.js';
 import {
+	CELL,
+	floeAt,
+	heightAt,
+	pushOutOfBlocks,
+	respawnSpot,
+	supportAt,
+	tileAt,
+	tileCenter,
+} from './arena.js';
+import {
+	AXIS_SNAP,
 	FALL_MS,
+	GRIP_DRAG,
 	ICE_DRAG,
 	INVULN_MS,
 	KNOCK_MS,
+	LANE_ASSIST,
 	PENGUIN_R,
 	RESPAWN_HEIGHT,
 	RESPAWN_MS,
 	SLICK_DRAG,
 	SLIDE_SPEED,
+	TURN_GRIP,
 	WALK_ACCEL,
 	WALK_SPEED,
 } from './constants.js';
@@ -78,7 +91,6 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 	}
 
 	const here = supportAt(arena, p.x, p.y, t);
-	const drag = here.slick ? SLICK_DRAG : ICE_DRAG;
 
 	let mx = input.mx;
 	let my = input.my;
@@ -86,6 +98,18 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 	if (mag > 1) {
 		mx /= mag;
 		my /= mag;
+	}
+	// A little snap to the grid: nearly-straight means straight.
+	let axis = /** @type {'x' | 'y' | ''} */ ('');
+	if (mag > 0.2) {
+		const a = Math.atan2(my, mx);
+		const q = Math.round(a / (Math.PI / 2)) * (Math.PI / 2);
+		if (Math.abs(a - q) < AXIS_SNAP) {
+			const m = Math.min(1, Math.hypot(mx, my));
+			mx = Math.round(Math.cos(q)) * m;
+			my = Math.round(Math.sin(q)) * m;
+			axis = mx !== 0 ? 'x' : 'y';
+		}
 	}
 	if (p.stunMs > 0) {
 		mx = 0;
@@ -101,7 +125,11 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 		// Relative to whatever we're standing on, so a drifting floe carries us.
 		let rvx = p.vx - here.vx;
 		let rvy = p.vy - here.vy;
-		const control = p.knockMs > 0 ? 0.18 : here.slick ? 0.35 : 1;
+		// Shoved and sliding faster than walking pace: that's ice. Otherwise
+		// your feet grip.
+		const flung = p.knockMs > 0 || Math.hypot(rvx, rvy) > WALK_SPEED * 1.1;
+		const drag = here.slick ? SLICK_DRAG : flung ? ICE_DRAG : GRIP_DRAG;
+		const control = p.knockMs > 0 ? 0.18 : here.slick ? 0.45 : 1;
 		if (mx !== 0 || my !== 0) {
 			const tx = mx * WALK_SPEED;
 			const ty = my * WALK_SPEED;
@@ -120,11 +148,35 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 			}
 			rvx += ax;
 			rvy += ay;
+			if (!flung && !here.slick) {
+				// Kill sideways drift so turns are tight.
+				const ux = mx / (Math.hypot(mx, my) || 1);
+				const uy = my / (Math.hypot(mx, my) || 1);
+				const along = rvx * ux + rvy * uy;
+				const k = Math.exp(-TURN_GRIP * dt);
+				rvx = ux * along + (rvx - ux * along) * k;
+				rvy = uy * along + (rvy - uy * along) * k;
+				// Walking straight: ease into the middle of your row/column.
+				const tk = tileAt(arena, p.x, p.y);
+				if (axis && tk >= 0) {
+					const c = tileCenter(arena, tk);
+					const off = axis === 'x' ? c.y - p.y : c.x - p.x;
+					if (Math.abs(off) < CELL * 0.4) {
+						const step = off * Math.min(1, LANE_ASSIST * dt);
+						if (axis === 'x') p.y += step;
+						else p.x += step;
+					}
+				}
+			}
 			if (p.stunMs <= 0 && p.knockMs <= 0)
 				p.face = turnToward(p.face, Math.atan2(my, mx), 14 * dt);
 		}
 		const damp =
-			mx !== 0 || my !== 0 ? Math.max(0, 1 - drag * 0.15 * dt) : Math.exp(-drag * dt);
+			mx !== 0 || my !== 0
+				? flung || here.slick
+					? Math.max(0, 1 - drag * 0.15 * dt)
+					: 1
+				: Math.exp(-drag * dt);
 		rvx *= damp;
 		rvy *= damp;
 		p.vx = rvx + here.vx;

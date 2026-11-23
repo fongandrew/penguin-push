@@ -40,6 +40,16 @@ test('title → changing station → solo match → leaderboard', async ({ page 
 	const x1 = await page.evaluate(() => window.__game.state.penguins[0].x);
 	expect(x1).toBeLessThan(x0);
 
+	// A snowball power: the E key throws one.
+	await page.evaluate(() => {
+		const me = window.__game.state.penguins[0];
+		me.power = 'snowball';
+		me.uses = 3;
+	});
+	await expect(page.locator('#btn-power')).toBeVisible();
+	await page.keyboard.press('KeyE');
+	await page.waitForFunction(() => window.__game.state.penguins[0].uses === 2);
+
 	// Send every computer penguin swimming for good.
 	await page.evaluate(() => {
 		const g = window.__game;

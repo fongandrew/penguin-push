@@ -1,12 +1,16 @@
 /**
  * Controls. Phones: a floating virtual stick (put your thumb down anywhere on
  * the left/middle of the screen and drag) plus big Push and Power buttons.
- * Keyboards: WASD/arrows to move, Space to push, Shift/E to use a power.
+ * Keyboards: WASD/arrows to move, Space (or J) to push, E (or Q/F/K/Shift/
+ * Enter) to use a power.
  */
 
 /** @typedef {import('./state.js').Input} Input */
 
 const STICK_R = 56;
+
+/** Keys that use your power (snowball, belly slide). */
+const POWER_KEYS = ['KeyE', 'KeyQ', 'KeyF', 'KeyK', 'ShiftLeft', 'ShiftRight', 'Enter'];
 
 export class Controls {
 	/**
@@ -34,13 +38,9 @@ export class Controls {
 				this.shove = true;
 				e.preventDefault();
 			}
-			if (
-				e.code === 'ShiftLeft' ||
-				e.code === 'ShiftRight' ||
-				e.code === 'KeyE' ||
-				e.code === 'KeyK'
-			) {
+			if (POWER_KEYS.includes(e.code)) {
 				this.power = true;
+				e.preventDefault();
 			}
 		});
 		addEventListener('keyup', (e) => this.keys.delete(e.code));

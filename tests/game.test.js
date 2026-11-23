@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { downhillDirs, rollPath, tileCenter } from '../public/src/arena.js';
 import { FALL_MS, RESPAWN_MS, START_LIVES, STEP } from '../public/src/constants.js';
 import { addThrow, onOut, tick } from '../public/src/game.js';
+import { knock } from '../public/src/physics.js';
 import { SoloLink } from '../public/src/solo.js';
 import { IDLE, soloMatch } from './helpers.js';
 
@@ -150,5 +151,77 @@ describe('blocks and water squares', () => {
 		me.y = c.y;
 		run(s, link, 50);
 		expect(me.mode).toBe('fall');
+	});
+});
+
+describe('controls', () => {
+	/** A lone penguin on the middle of the cove map. */
+	function lone() {
+		const s = soloMatch('cove', 9, 0);
+		const link = onlyMe(s);
+		const me = s.penguins[0];
+		const arena = s.arena;
+		if (!me || !arena) throw new Error('setup');
+		for (const p of s.penguins.slice(1)) p.x = 99;
+		// A clear row: put us on a free tile centre with free tiles to the east.
+		const k = arena.level.findIndex((l, k) => {
+			if (l !== 0 || arena.block[k]) return false;
+			for (let d = 1; d <= 3; d++)
+				if (arena.level[k + d] !== 0 || arena.block[k + d]) return false;
+			const c = tileCenter(arena, k);
+			return !arena.obstacles.some((o) => Math.hypot(c.x - o.x, c.y - o.y) < 3);
+		});
+		const c = tileCenter(arena, k);
+		me.x = c.x;
+		me.y = c.y;
+		me.invulnMs = 1e9;
+		return { s, link, me, k };
+	}
+
+	it('stops quickly when you let go (grippy, not a skating rink)', () => {
+		const { s, link, me } = lone();
+		run(s, link, 600, { ...IDLE, mx: 1 });
+		expect(me.vx).toBeGreaterThan(3.5);
+		const x0 = me.x;
+		run(s, link, 600);
+		expect(Math.hypot(me.vx, me.vy)).toBeLessThan(0.2);
+		expect(me.x - x0).toBeLessThan(0.7);
+	});
+
+	it('snaps a nearly-straight stick to the grid and centres you in your row', () => {
+		const { s, link, me } = lone();
+		const y0 = me.y;
+		me.y += 0.3;
+		run(s, link, 500, { ...IDLE, mx: 1, my: 0.15 });
+		expect(Math.abs(me.y - y0)).toBeLessThan(0.12);
+	});
+
+	it('still sends you sliding when you get shoved', () => {
+		const { s, link, me } = lone();
+		const x0 = me.x;
+		me.invulnMs = 0;
+		knock(me, 9.5, 0, 0);
+		run(s, link, 1200);
+		expect(me.x - x0).toBeGreaterThan(2.5);
+	});
+});
+
+describe('computer penguins', () => {
+	it('keep moving on every map instead of standing around', () => {
+		for (const map of ['hill', 'floes', 'grid']) {
+			const s = soloMatch(map, 21);
+			const link = new SoloLink(s);
+			let still = 0;
+			let total = 0;
+			for (let f = 0; f < 60 * 25 && s.mode !== 'done'; f++) {
+				tick(s, link, s.t + STEP * 1000, STEP, IDLE);
+				for (const p of s.penguins) {
+					if (p.mode !== 'play' || p.stunMs > 0) continue;
+					total++;
+					if (p.speed < 0.3) still++;
+				}
+			}
+			expect(still / total).toBeLessThan(0.12);
+		}
 	});
 });

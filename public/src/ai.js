@@ -36,6 +36,11 @@ import { angleDiff, floeUnder } from './physics.js';
  * @property {number} wobble Steering noise phase.
  * @property {number} skill 0..1
  * @property {number} calmMs After a shove: wander for a moment.
+ * @property {number} lastX Where it was at the last progress check.
+ * @property {number} lastY
+ * @property {number} checkMs Until the next progress check.
+ * @property {number} unstickMs Wandering to get unstuck.
+ * @property {number} wanderA Which way to wander.
  */
 
 /** @type {WeakMap<Penguin, Brain>} */
@@ -56,6 +61,11 @@ function brainOf(p) {
 			wobble: Math.random() * 10,
 			skill: 0.45 + Math.random() * 0.35,
 			calmMs: 0,
+			lastX: p.x,
+			lastY: p.y,
+			checkMs: 1500,
+			unstickMs: 0,
+			wanderA: Math.random() * Math.PI * 2,
 		};
 		brains.set(p, b);
 	}
@@ -77,6 +87,21 @@ export function botInput(state, p, t) {
 	const dt = 1000 / 60;
 	brain.thinkMs -= dt;
 	brain.calmMs = Math.max(0, brain.calmMs - dt);
+	brain.unstickMs = Math.max(0, brain.unstickMs - dt);
+	// Progress check: barely moved in 1.5 s? Re-plan and wander a bit.
+	brain.checkMs -= dt;
+	if (brain.checkMs <= 0) {
+		brain.checkMs = 1500;
+		if (Math.hypot(p.x - brain.lastX, p.y - brain.lastY) < 0.6) {
+			brain.unstickMs = 900 + Math.random() * 700;
+			brain.wanderA = Math.random() * Math.PI * 2;
+			brain.thinkMs = 0;
+			brain.target = -1;
+			brain.ball = -1;
+		}
+		brain.lastX = p.x;
+		brain.lastY = p.y;
+	}
 	brain.wobble += dt / 1000;
 
 	const others = state.penguins.filter((q) => q !== p && q.mode === 'play');
@@ -116,6 +141,8 @@ export function botInput(state, p, t) {
 	// 1. Danger first: edges, sinking floes, waves, rolling snowballs.
 	const edge = edginess(arena, p.x, p.y, t);
 	const fi = floeUnder(arena, p.x, p.y, t);
+	/** @type {{ x: number, y: number, gain: number }} */
+	let safe = { x: p.x, y: p.y, gain: 0 };
 	const floe = fi >= 0 ? arena.floes[fi] : undefined;
 	const floeDanger = floe ? floeAt(floe, t).warn || floeAt(floe, t).sink > 0 : false;
 	const wave = waveAt(arena, t);
@@ -123,11 +150,14 @@ export function botInput(state, p, t) {
 	if (floe && (floeDanger || Math.random() < 0.02)) {
 		gx = -p.x;
 		gy = -p.y;
-	} else if (edge > 0.78) {
-		// Back away from the water to the safest spot close by.
-		const safe = safestNear(state, p, t);
+	} else if (edge > 0.9 && (safe = safestNear(state, p, t)).gain > 0.12) {
+		// Right at the brink: step back to a clearly safer spot close by.
 		gx = safe.x - p.x;
 		gy = safe.y - p.y;
+	} else if (brain.unstickMs > 0) {
+		// Unsticking: wander somewhere walkable in a fresh direction.
+		gx = Math.cos(brain.wanderA) * 3;
+		gy = Math.sin(brain.wanderA) * 3;
 	} else if (
 		wave &&
 		(wave.phase === 'warn' || wave.front < p.x * Math.cos(wave.dir) + p.y * Math.sin(wave.dir))
@@ -269,7 +299,8 @@ export function botInput(state, p, t) {
 	if (Math.hypot(gx, gy) > 0.05 && fi < 0) {
 		const wp = route(nav, p.x, p.y, p.x + gx, p.y + gy);
 		if (!wp) {
-			// No way there (it's across the water): hold still rather than wade in.
+			// Boxed in (rare): pick a new direction next time round.
+			brain.wanderA = Math.random() * Math.PI * 2;
 			gx = 0;
 			gy = 0;
 		} else {
@@ -304,7 +335,7 @@ export function botInput(state, p, t) {
 		}
 	}
 	// Tiptoe near the water: ice is slippery and turns are wide.
-	const careful = edginess(arena, p.x, p.y, t) > 0.55 ? 0.6 : 1;
+	const careful = edge > 0.92 ? 0.7 : 1;
 
 	const gl = Math.hypot(gx, gy);
 	if (gl < 0.05) return { ...none, shove: wantShove, power: wantPower };
@@ -343,8 +374,9 @@ function nearestJar(state, p, t) {
 function safestNear(state, p, t) {
 	const arena = /** @type {import('./arena.js').Arena} */ (state.arena);
 	const nav = navFor(arena, t);
+	const here = edginess(arena, p.x, p.y, t);
 	let best = { x: p.x, y: p.y };
-	let bestE = edginess(arena, p.x, p.y, t);
+	let bestE = here;
 	for (const r of [0.8, 1.5, 2.3]) {
 		for (let s = 0; s < 12; s++) {
 			const a = (s / 12) * Math.PI * 2;
@@ -358,5 +390,5 @@ function safestNear(state, p, t) {
 			}
 		}
 	}
-	return best;
+	return { ...best, gain: here - bestE };
 }

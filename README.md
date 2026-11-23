@@ -12,8 +12,9 @@ online or against computer penguins, and the wins add up across a session.
 
 ## How to play
 
-- 🕹️ Put your thumb down anywhere and drag to waddle (WASD / arrows on a keyboard).
-- 👋 **Push!** (Space) slaps everyone in front of you with your flippers.
+- 🕹️ Put your thumb down anywhere and drag to waddle. On a keyboard: <kbd>WASD</kbd> / arrow keys. Nearly-straight snaps to straight, and walking straight eases you into the middle of your row of tiles, so bridges and corridors are easy. Let go and you stop. Getting shoved is what sends you sliding.
+- 👋 **Push!** (<kbd>Space</kbd>) slaps everyone in front of you with your flippers.
+- ✨ The blue power button (<kbd>E</kbd>, or <kbd>Shift</kbd>/<kbd>Q</kbd>/<kbd>F</kbd>/<kbd>Enter</kbd>) uses your power. On a computer the buttons show their keys, and picking up a power tells you which key to press.
 - ❤️ You start with 5 lives. Fall in and you lose one, then drop back in from the sky.
 - 🫙 Jars pop up on the ice. A **heart** jar gives you a life back. A **fish** jar gives you a power:
   - ❄️ **Snowballs** (×3): auto-aimed, and a hit makes a penguin dizzy for a moment.

@@ -99,9 +99,10 @@ export function clearLine(nav, ax, ay, bx, by) {
 }
 
 /**
- * Where to head next to get from (ax, ay) to (bx, by): the goal itself if
- * there's a clear line, else the farthest visible cell along a shortest
- * grid route. Null if there's no way there.
+ * Where to head next to get from (ax, ay) toward (bx, by): the goal itself if
+ * there's a clear line, else the farthest visible cell along a shortest grid
+ * route to the reachable cell nearest the goal (so a goal across the water
+ * still gets you as close as you can get). Null only if you're boxed in.
  *
  * @param {Nav} nav
  * @param {number} ax
@@ -113,65 +114,78 @@ export function clearLine(nav, ax, ay, bx, by) {
 export function route(nav, ax, ay, bx, by) {
 	if (clearLine(nav, ax, ay, bx, by)) return { x: bx, y: by };
 	const start = cellOf(ax, ay);
-	let goal = cellOf(bx, by);
-	if (!nav.ok[goal]) {
-		// Aim for the nearest walkable cell to the goal instead.
-		let best = -1;
-		let bestD = Infinity;
-		const g = centre(goal);
-		for (let c = 0; c < N * N; c++) {
-			if (!nav.ok[c]) continue;
-			const p = centre(c);
-			const d = (p.x - g.x) ** 2 + (p.y - g.y) ** 2;
-			if (d < bestD) {
-				bestD = d;
-				best = c;
-			}
-		}
-		if (best < 0) return null;
-		goal = best;
+	if (!nav.ok[start]) {
+		// Standing in the margin by the water or a block: step to the nearest
+		// walkable cell first.
+		const near = nearestOk(nav, start, 4);
+		if (near < 0) return null;
+		return centre(near);
 	}
-	// BFS from the goal; then walk downhill in distance from the start.
-	const dist = new Int16Array(N * N).fill(-1);
+	const goal = cellOf(bx, by);
+	const g = centre(goal);
+	// BFS out from where we are; remember the reachable cell nearest the goal.
+	const parent = new Int32Array(N * N).fill(-2);
 	const queue = new Int32Array(N * N);
 	let head = 0;
 	let tail = 0;
-	dist[goal] = 0;
-	queue[tail++] = goal;
+	parent[start] = -1;
+	queue[tail++] = start;
+	let best = start;
+	let bestD = Infinity;
 	while (head < tail) {
 		const c = /** @type {number} */ (queue[head++]);
-		if (c === start) break;
+		const p = centre(c);
+		const d = (p.x - g.x) ** 2 + (p.y - g.y) ** 2;
+		if (d < bestD) {
+			bestD = d;
+			best = c;
+			if (c === goal) break;
+		}
 		const i = c % N;
-		const nd = /** @type {number} */ (dist[c]) + 1;
-		for (const n of [c - 1, c + 1, c - N, c + N]) {
-			if (n < 0 || n >= N * N) continue;
-			if ((n === c - 1 && i === 0) || (n === c + 1 && i === N - 1)) continue;
-			if (dist[n] !== -1 || (!nav.ok[n] && n !== start)) continue;
-			dist[n] = nd;
-			queue[tail++] = n;
+		for (const nb of [c - 1, c + 1, c - N, c + N]) {
+			if (nb < 0 || nb >= N * N) continue;
+			if ((nb === c - 1 && i === 0) || (nb === c + 1 && i === N - 1)) continue;
+			if (parent[nb] !== -2 || !nav.ok[nb]) continue;
+			parent[nb] = c;
+			queue[tail++] = nb;
 		}
 	}
-	if (dist[start] === -1) return null;
-	let c = start;
-	let target = centre(c);
-	for (let steps = 0; steps < 40 && c !== goal; steps++) {
-		const i = c % N;
-		let next = -1;
-		for (const n of [c - 1, c + 1, c - N, c + N]) {
-			if (n < 0 || n >= N * N) continue;
-			if ((n === c - 1 && i === 0) || (n === c + 1 && i === N - 1)) continue;
-			if (dist[n] === -1) continue;
-			if (next === -1 || /** @type {number} */ (dist[n]) < /** @type {number} */ (dist[next]))
-				next = n;
-		}
-		if (next === -1 || /** @type {number} */ (dist[next]) >= /** @type {number} */ (dist[c]))
-			break;
-		const p = centre(next);
+	if (best === start) return null;
+	// Walk the path back from `best`, and aim at the farthest cell we can see.
+	/** @type {number[]} */
+	const path = [];
+	for (let c = best; c !== -1 && c !== start; c = /** @type {number} */ (parent[c])) path.push(c);
+	path.reverse();
+	let target = centre(path[0] ?? best);
+	for (const c of path.slice(0, 40)) {
+		const p = centre(c);
 		if (!clearLine(nav, ax, ay, p.x, p.y)) break;
 		target = p;
-		c = next;
 	}
 	return target;
+}
+
+/**
+ * @param {Nav} nav
+ * @param {number} c
+ * @param {number} radius In cells.
+ */
+function nearestOk(nav, c, radius) {
+	const ci = c % N;
+	const cj = Math.floor(c / N);
+	let best = -1;
+	let bestD = Infinity;
+	for (let j = cj - radius; j <= cj + radius; j++) {
+		for (let i = ci - radius; i <= ci + radius; i++) {
+			if (i < 0 || j < 0 || i >= N || j >= N || !nav.ok[j * N + i]) continue;
+			const d = (i - ci) ** 2 + (j - cj) ** 2;
+			if (d < bestD) {
+				bestD = d;
+				best = j * N + i;
+			}
+		}
+	}
+	return best;
 }
 
 /**
