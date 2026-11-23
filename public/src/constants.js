@@ -34,14 +34,17 @@ export const KNOCK_MS = 420;
 /** Flipper shove. */
 export const SHOVE_RANGE = 1.35;
 export const SHOVE_CONE = 1.1; // radians either side of facing
-export const SHOVE_POWER = 9.5;
+/** A shove from a standstill: a nudge, about a tile. */
+export const SHOVE_POWER = 4.5;
+/** Extra shove per unit of closing speed: run in to really send them. */
+export const SHOVE_RUN = 1.4;
 export const SHOVE_COOLDOWN_MS = 520;
 export const SHOVE_ANIM_MS = 260;
 export const MEGA_FACTOR = 1.75;
 export const MEGA_MS = 9000;
 
 /** Body bump when two penguins run into each other. */
-export const BUMP_POWER = 2.2;
+export const BUMP_POWER = 0.9;
 export const BUMP_COOLDOWN_MS = 300;
 
 /** Belly slide (fish power). */

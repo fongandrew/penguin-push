@@ -148,6 +148,7 @@ export function botInput(state, p, t) {
 	let gx = 0;
 	let gy = 0;
 	let wantShove = false;
+	let charging = false;
 	let wantPower = false;
 
 	// 1. Danger first: edges, sinking floes, waves, rolling snowballs.
@@ -265,9 +266,11 @@ export function botInput(state, p, t) {
 				const ax = target.x - ox * 0.95;
 				const ay = target.y - oy * 0.95;
 				const dist = Math.hypot(target.x - p.x, target.y - p.y);
-				if (dist < 2.2) {
+				if (dist < 3.2) {
+					// Lined up: charge, so the shove lands at full speed.
 					gx = target.x - p.x;
 					gy = target.y - p.y;
+					charging = true;
 				} else {
 					gx = ax - p.x;
 					gy = ay - p.y;
@@ -275,7 +278,9 @@ export function botInput(state, p, t) {
 				const facing = Math.abs(
 					angleDiff(Math.atan2(target.y - p.y, target.x - p.x), p.face),
 				);
-				if (dist < SHOVE_RANGE * 0.95 && facing < 0.8) {
+				// Skilled bots wait until they're up to speed; any bot shoves at point blank.
+				const atSpeed = p.speed > 2.5 * brain.skill || dist < 0.9;
+				if (dist < SHOVE_RANGE * 0.95 && facing < 0.8 && atSpeed) {
 					brain.react -= dt;
 					if (brain.react <= 0) {
 						wantShove = true;
@@ -357,7 +362,7 @@ export function botInput(state, p, t) {
 	if (gl < 0.05) return { ...none, shove: wantShove, power: wantPower };
 	const noise = 0.25 * (1 - brain.skill);
 	const ang = Math.atan2(gy, gx) + Math.sin(brain.wobble * 3) * noise;
-	const sp = Math.min(1, gl / 0.6) * (0.75 + 0.25 * brain.skill) * careful;
+	const sp = charging ? careful : Math.min(1, gl / 0.6) * (0.75 + 0.25 * brain.skill) * careful;
 	return { mx: Math.cos(ang) * sp, my: Math.sin(ang) * sp, shove: wantShove, power: wantPower };
 }
 

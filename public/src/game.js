@@ -38,6 +38,7 @@ import {
 	SHOVE_COOLDOWN_MS,
 	SHOVE_POWER,
 	SHOVE_RANGE,
+	SHOVE_RUN,
 	SLIDE_HIT,
 	SLIDE_MS,
 	SLIDE_USES,
@@ -46,6 +47,7 @@ import {
 	SNOWBALL_SPEED,
 	SNOWBALL_USES,
 	STUN_MS,
+	WALK_SPEED,
 } from './constants.js';
 import { ballAt, freshContest, jarAvailable } from './contest.js';
 import { angleDiff, beginRespawn, knock, movePenguin } from './physics.js';
@@ -237,8 +239,6 @@ function stepOwned(state, link, p, input, t, dt, solids) {
 function shove(state, link, p) {
 	p.shoveMs = SHOVE_ANIM_MS;
 	p.cooldownMs = SHOVE_COOLDOWN_MS;
-	p.vx += Math.cos(p.face) * 1.6;
-	p.vy += Math.sin(p.face) * 1.6;
 	const mega = p.megaMs > 0;
 	const range = SHOVE_RANGE + (mega ? 0.35 : 0);
 	let hit = false;
@@ -249,7 +249,12 @@ function shove(state, link, p) {
 		const d = Math.hypot(dx, dy);
 		if (d > range || d < 1e-6) continue;
 		if (Math.abs(angleDiff(Math.atan2(dy, dx), p.face)) > SHOVE_CONE) continue;
-		const power = SHOVE_POWER * (mega ? MEGA_FACTOR : 1);
+		// A running shove hits much harder than a standing one.
+		const closing = Math.max(
+			0,
+			Math.min(WALK_SPEED * 1.1, ((p.vx - q.vx) * dx + (p.vy - q.vy) * dy) / d),
+		);
+		const power = (SHOVE_POWER + SHOVE_RUN * closing) * (mega ? MEGA_FACTOR : 1);
 		// Mostly away from the shover, a bit along their facing.
 		const nx = (dx / d) * 0.75 + Math.cos(p.face) * 0.25;
 		const ny = (dy / d) * 0.75 + Math.sin(p.face) * 0.25;
@@ -257,6 +262,9 @@ function shove(state, link, p) {
 		push(state, link, q, (nx / n) * power, (ny / n) * power, 0);
 		hit = true;
 	}
+	// A little lunge into the slap.
+	p.vx += Math.cos(p.face) * 1.6;
+	p.vy += Math.sin(p.face) * 1.6;
 	state.fx.push({ kind: 'slap', x: p.x, y: p.y, pid: p.id, z: hit ? 1 : 0 });
 }
 

@@ -1,9 +1,9 @@
 import { describe, expect, it } from 'vitest';
 
-import { downhillDirs, rollPath, tileCenter } from '../public/src/arena.js';
+import { CELL, downhillDirs, rollPath, tileCenter } from '../public/src/arena.js';
 import { FALL_MS, RESPAWN_MS, START_LIVES, STEP } from '../public/src/constants.js';
 import { addThrow, onOut, tick } from '../public/src/game.js';
-import { knock } from '../public/src/physics.js';
+import { knock, movePenguin } from '../public/src/physics.js';
 import { SoloLink } from '../public/src/solo.js';
 import { IDLE, soloMatch } from './helpers.js';
 
@@ -31,20 +31,51 @@ function onlyMe(/** @type {import('../public/src/state.js').State} */ s) {
 }
 
 describe('match rules', () => {
-	it('flipper-shoves the penguin in front of you', () => {
-		const s = soloMatch('cove', 1, 0);
-		const solo = new SoloLink(s);
+	/**
+	 * Shove penguin 1 from 1 unit away, with us moving at `speed` toward it.
+	 * Returns how far it slides.
+	 *
+	 * @param {number} speed
+	 */
+	function shoveTravel(speed) {
+		const s = soloMatch('grid', 1, 0);
+		const arena = s.arena;
+		if (!arena) throw new Error('arena');
+		// An all-ice board, so nobody falls in mid-measurement.
+		arena.level.fill(0);
+		arena.block.fill(0);
+		arena.blocks.length = 0;
+		arena.crack.fill(Infinity);
 		const [me, them] = s.penguins;
 		if (!me || !them) throw new Error('roster');
-		me.x = 0;
+		for (const p of s.penguins.slice(2)) p.x = -9;
+		me.x = -1;
 		me.y = 0;
 		me.face = 0;
-		them.x = 1.0;
+		me.vx = speed;
+		them.x = 0;
 		them.y = 0;
-		// Everyone else far away.
-		for (const p of s.penguins.slice(2)) p.x = -5;
-		tick(s, solo, 16, STEP, { ...IDLE, shove: true });
-		expect(them.vx).toBeGreaterThan(5);
+		them.invulnMs = 0;
+		// Stunned, so it can't steer while we measure its slide.
+		them.stunMs = 1e9;
+		// Own both so the shove lands directly, then let it slide unsteered.
+		const both = {
+			owns: (/** @type {number} */ pid) => pid < 2,
+			send: () => {},
+			claim: () => {},
+		};
+		const x0 = them.x;
+		tick(s, both, s.t + 16, STEP, { ...IDLE, shove: true });
+		for (let i = 0; i < 180; i++) movePenguin(them, IDLE, arena, s.t, STEP, [], []);
+		return them.x - x0;
+	}
+
+	it('a standing shove is a nudge; a running shove sends them flying', () => {
+		const standing = shoveTravel(0);
+		const running = shoveTravel(4.4);
+		expect(standing).toBeGreaterThan(0.6);
+		expect(standing).toBeLessThan(CELL * 1.2);
+		expect(running).toBeGreaterThan(standing * 2.2);
 	});
 
 	it('loses a life in the water and drops back in', () => {
