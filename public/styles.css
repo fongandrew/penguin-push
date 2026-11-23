@@ -130,36 +130,69 @@ button {
 
 .logo {
 	text-align: center;
-	filter: drop-shadow(0 6px 0 rgba(23, 50, 77, 0.25));
 }
 
+/* Thick outline + a solid drop shadow: readable on white ice or blue sea. */
 .logo h1 {
 	margin: 0;
-	font-size: clamp(48px, 13vw, 110px);
+	font-size: clamp(52px, 14vw, 118px);
 	line-height: 0.95;
 	font-weight: 900;
-	letter-spacing: -1px;
+	letter-spacing: 0;
 	color: white;
-	-webkit-text-stroke: 3px var(--ink);
+	-webkit-text-stroke: 0.14em var(--ink);
 	paint-order: stroke fill;
+	text-shadow:
+		0 0.07em 0 var(--ink),
+		0 0.13em 0.12em rgba(10, 30, 50, 0.45);
+}
+
+.logo h1 span {
+	display: inline-block;
+}
+
+.logo h1 span:first-child {
+	transform: rotate(-3deg);
 }
 
 .logo h1 span:last-child {
 	color: var(--gold);
+	transform: rotate(2deg);
 }
 
-.logo .tag {
-	position: static;
-	background: none;
-	color: var(--ink);
-	font-size: clamp(18px, 4.5vw, 28px);
-	text-shadow: none;
-	box-shadow: none;
-	margin: 10px 0 0;
+.tagline {
+	display: inline-block;
+	margin: 14px 0 0;
+	padding: 6px 18px;
+	border-radius: 999px;
+	background: var(--ink);
+	color: white;
+	font-weight: 800;
+	font-size: clamp(17px, 4.2vw, 26px);
+	box-shadow: 0 4px 0 rgba(10, 30, 50, 0.35);
 }
 
-.logo .tag b {
-	color: var(--sea);
+.tagline b {
+	color: #7fd4ff;
+}
+
+/* Calm the busy 3D scene behind the menu so the title stands out. */
+#title::before {
+	content: '';
+	position: fixed;
+	inset: 0;
+	z-index: -1;
+	pointer-events: none;
+	background: radial-gradient(
+		ellipse at 50% 42%,
+		rgba(16, 48, 84, 0.42) 0%,
+		rgba(16, 48, 84, 0.2) 45%,
+		rgba(16, 48, 84, 0) 75%
+	);
+}
+
+#title {
+	isolation: isolate;
 }
 
 .stack {
