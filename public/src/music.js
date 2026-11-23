@@ -150,7 +150,9 @@ function schedule() {
 			continue;
 		}
 		const len = stepLen(s);
-		for (const { note } of notesBetween(s, step, step + 1)) play(note, stepTime, len);
+		// Swing: the off-16ths land a little late, for a lilting bounce.
+		const late = step % 2 === 1 ? s.swing * len : 0;
+		for (const { note } of notesBetween(s, step, step + 1)) play(note, stepTime + late, len);
 		step++;
 		stepTime += len;
 	}
@@ -179,13 +181,13 @@ function voice(ctx, bus, n, t, sixteenth) {
 	const dur = n.len * sixteenth;
 	switch (n.voice) {
 		case 'bell': {
-			// Sine plus a quiet octave: a soft glockenspiel.
-			tone(ctx, bus, 'sine', freq(n.midi), t, dur * 0.9 + 0.25, 0.32 * n.vel, 0.005);
-			tone(ctx, bus, 'sine', freq(n.midi) * 2, t, 0.25, 0.08 * n.vel, 0.003);
+			// A round bell: a soft attack, just a touch of shimmer on top.
+			tone(ctx, bus, 'sine', freq(n.midi), t, dur * 0.95 + 0.35, 0.3 * n.vel, 0.012);
+			tone(ctx, bus, 'sine', freq(n.midi) * 2, t, 0.18, 0.035 * n.vel, 0.006);
 			break;
 		}
 		case 'pluck':
-			tone(ctx, bus, 'triangle', freq(n.midi), t, 0.16, 0.22 * n.vel, 0.003);
+			tone(ctx, bus, 'triangle', freq(n.midi), t, 0.22, 0.2 * n.vel, 0.006, 2600);
 			break;
 		case 'bass':
 			tone(
@@ -201,16 +203,17 @@ function voice(ctx, bus, n, t, sixteenth) {
 			);
 			break;
 		case 'stab':
+			// Mellow chord stabs: a filtered triangle, not a buzzy square.
 			tone(
 				ctx,
 				bus,
-				'square',
+				'triangle',
 				freq(n.midi),
 				t,
-				Math.max(0.08, dur * 0.6),
-				0.05 * n.vel,
-				0.004,
-				1600,
+				Math.max(0.1, dur * 0.7),
+				0.09 * n.vel,
+				0.008,
+				1300,
 			);
 			break;
 		case 'kick': {
@@ -226,10 +229,10 @@ function voice(ctx, bus, n, t, sixteenth) {
 			break;
 		}
 		case 'snare':
-			noise(ctx, bus, t, 0.12, 0.35 * n.vel, 'bandpass', 1800);
+			noise(ctx, bus, t, 0.08, 0.3 * n.vel, 'bandpass', 2200);
 			break;
 		case 'hat':
-			noise(ctx, bus, t, 0.04, 0.18 * n.vel, 'highpass', 7000);
+			noise(ctx, bus, t, 0.03, 0.12 * n.vel, 'highpass', 8000);
 			break;
 	}
 }
@@ -310,6 +313,6 @@ export function renderSong(ctx, bus, id, loops) {
 	const len = stepLen(s);
 	const steps = s.steps ? s.steps * loops : 32;
 	for (const { at, note } of notesBetween(s, 0, steps))
-		voice(ctx, bus, note, 0.05 + at * len, len);
+		voice(ctx, bus, note, 0.05 + at * len + (at % 2 === 1 ? s.swing * len : 0), len);
 	return 0.05 + steps * len + 0.6;
 }

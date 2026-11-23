@@ -34,7 +34,7 @@ export function unlockAudio() {
 }
 
 /** Music sits under the sound effects. */
-const MUSIC_LEVEL = 0.32;
+const MUSIC_LEVEL = 0.28;
 
 /** @type {(() => void)[]} */
 const onUnlock = [];

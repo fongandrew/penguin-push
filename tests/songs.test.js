@@ -63,6 +63,18 @@ describe('the soundtrack', () => {
 		expect(across.some((e) => e.at >= song.steps)).toBe(true);
 	});
 
+	it('stays calm but playful: easy tempos, a little swing, sudden death the quickest', () => {
+		const bpm = (/** @type {string} */ id) => SONGS[id]?.bpm ?? 0;
+		expect(bpm('menu')).toBeLessThanOrEqual(110);
+		expect(bpm('match')).toBeLessThanOrEqual(110);
+		expect(bpm('danger')).toBeGreaterThan(bpm('match'));
+		expect(bpm('danger')).toBeLessThan(130);
+		for (const song of Object.values(SONGS)) {
+			expect(song.swing).toBeGreaterThanOrEqual(0);
+			expect(song.swing).toBeLessThan(0.35);
+		}
+	});
+
 	it('plays the fanfare once rather than looping it', () => {
 		const win = SONGS['win'];
 		if (!win) throw new Error('win');

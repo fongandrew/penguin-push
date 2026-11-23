@@ -20,6 +20,7 @@
  * @typedef {object} Song
  * @property {string} id
  * @property {number} bpm
+ * @property {number} swing 0 straight … ~0.3 lilting: how late the offbeat 16ths land.
  * @property {number} steps Loop length in 16ths (0 = play once).
  * @property {Note[]} notes Sorted by step.
  */
@@ -95,7 +96,7 @@ function line(start, line, voice, vel) {
  * @param {object} feel
  * @param {'walk' | 'eighths' | 'long'} feel.bass
  * @param {boolean} feel.stabs
- * @param {'none' | 'soft' | 'full' | 'drive'} feel.drums
+ * @param {'none' | 'soft' | 'light' | 'full' | 'drive'} feel.drums
  * @returns {Note[]}
  */
 function band(bars, feel) {
@@ -132,10 +133,26 @@ function band(bars, feel) {
 		if (feel.stabs) {
 			for (const o of [2, 6, 10, 14]) {
 				for (const t of c.tones)
-					out.push({ step: s + o, midi: midi(t), len: 1, voice: 'stab', vel: 0.35 });
+					out.push({ step: s + o, midi: midi(t), len: 1, voice: 'stab', vel: 0.25 });
 			}
 		}
-		if (feel.drums === 'soft') {
+		if (feel.drums === 'light') {
+			// Gentle: a soft kick, a quiet snap on 2 and 4, faint hats.
+			for (const o of [0, 8])
+				out.push({ step: s + o, midi: 0, len: 1, voice: 'kick', vel: 0.55 });
+			out.push({ step: s + 10, midi: 0, len: 1, voice: 'kick', vel: 0.35 });
+			for (const o of [4, 12])
+				out.push({ step: s + o, midi: 0, len: 1, voice: 'snare', vel: 0.32 });
+			for (let h = 0; h < 8; h++) {
+				out.push({
+					step: s + h * 2,
+					midi: 0,
+					len: 1,
+					voice: 'hat',
+					vel: h % 2 ? 0.16 : 0.24,
+				});
+			}
+		} else if (feel.drums === 'soft') {
 			for (const o of [2, 6, 10, 14])
 				out.push({ step: s + o, midi: 0, len: 1, voice: 'hat', vel: 0.35 });
 		} else if (feel.drums === 'full' || feel.drums === 'drive') {
@@ -172,18 +189,18 @@ function arpeggios(bars) {
 	bars.forEach((name, b) => {
 		const tones = chord(name).tones.map((t) => midi(t) + 24);
 		const pattern = [0, 1, 2, 3, 2, 1, 0, 1];
-		for (let i = 0; i < 16; i++) {
-			const idx = /** @type {number} */ (pattern[i % 8]);
+		for (let i = 0; i < 8; i++) {
+			const idx = /** @type {number} */ (pattern[i]);
 			const m =
 				idx === 3
 					? /** @type {number} */ (tones[0]) + 12
 					: /** @type {number} */ (tones[idx]);
 			out.push({
-				step: b * 16 + i,
+				step: b * 16 + i * 2,
 				midi: m,
-				len: 1,
+				len: 2,
 				voice: 'pluck',
-				vel: i % 4 === 0 ? 0.55 : 0.35,
+				vel: i % 2 === 0 ? 0.5 : 0.35,
 			});
 		}
 	});
@@ -200,7 +217,8 @@ const MATCH_BARS = ['C', 'Am', 'F', 'G', 'C', 'Am', 'F', 'G'];
 /** Title screen, changing station, lobby: gentle and twinkly. */
 const MENU = {
 	id: 'menu',
-	bpm: 96,
+	bpm: 88,
+	swing: 0.18,
 	steps: 128,
 	notes: sorted([
 		...band(['C', 'Am', 'F', 'G', 'C', 'Em', 'F', 'G'], {
@@ -222,10 +240,11 @@ const MENU = {
 /** During a match: bouncy. */
 const MATCH = {
 	id: 'match',
-	bpm: 126,
+	bpm: 108,
+	swing: 0.22,
 	steps: 128,
 	notes: sorted([
-		...band(MATCH_BARS, { bass: 'walk', stabs: true, drums: 'full' }),
+		...band(MATCH_BARS, { bass: 'walk', stabs: true, drums: 'light' }),
 		...line(0, 'E5:2 G5:2 C6:4 B5:2 G5:2 E5:4', 'bell', 0.6),
 		...line(16, 'A5:2 C6:2 E6:4 D6:2 C6:2 A5:4', 'bell', 0.6),
 		...line(32, 'F5:2 A5:2 C6:4 A5:2 F5:2 A5:4', 'bell', 0.6),
@@ -240,10 +259,11 @@ const MATCH = {
 /** Sudden death: faster, driving, arpeggios instead of a tune. */
 const DANGER = {
 	id: 'danger',
-	bpm: 144,
+	bpm: 124,
+	swing: 0.12,
 	steps: 64,
 	notes: sorted([
-		...band(['Am', 'F', 'C', 'G'], { bass: 'eighths', stabs: false, drums: 'drive' }),
+		...band(['Am', 'F', 'C', 'G'], { bass: 'eighths', stabs: false, drums: 'full' }),
 		...arpeggios(['Am', 'F', 'C', 'G']),
 	]),
 };
@@ -251,7 +271,8 @@ const DANGER = {
 /** Somebody won: a one-shot fanfare. */
 const WIN = {
 	id: 'win',
-	bpm: 132,
+	bpm: 120,
+	swing: 0,
 	steps: 0,
 	notes: sorted([
 		...line(0, 'C5:1 E5:1 G5:1 C6:3 G5:1 C6:1 E6:8', 'bell', 0.75),
