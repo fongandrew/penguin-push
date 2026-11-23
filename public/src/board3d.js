@@ -19,6 +19,9 @@ import {
 import { WALLS_CRUMBLE_MS } from './constants.js';
 import { toon, toonGradient } from './penguin3d.js';
 
+/** Mean sea level (must match render.js). */
+const WATER_Y = -0.42;
+
 /** @typedef {import('./arena.js').Arena} Arena */
 
 const DEPTH = 1.9;
@@ -119,6 +122,21 @@ export class Board {
 		});
 		this.group.add(this.tileMesh);
 
+		// A soft snow cap on every tile, overhanging a touch — the cosy look.
+		const capGeo = new THREE.BoxGeometry(CELL - GAP + 0.04, 0.1, CELL - GAP + 0.04);
+		capGeo.translate(0, -0.035, 0);
+		this.snowMesh = new THREE.InstancedMesh(
+			capGeo,
+			new THREE.MeshLambertMaterial({ color: 0xffffff }),
+			this.tiles.length,
+		);
+		this.snowMesh.receiveShadow = true;
+		this.tiles.forEach((k, i) => {
+			this.snowMesh.setMatrixAt(i, this.capMatrix(k, 0, 0, 0));
+			this.snowMesh.setColorAt(i, this.tints[i] ?? new THREE.Color(1, 1, 1));
+		});
+		this.group.add(this.snowMesh);
+
 		// Shine streaks on polished (slippery) tiles.
 		const shine = new THREE.MeshBasicMaterial({
 			color: 0xffffff,
@@ -136,7 +154,7 @@ export class Board {
 			]) {
 				const s = new THREE.Mesh(new THREE.PlaneGeometry(len ?? 0.5, 0.06), shine);
 				s.rotation.set(-Math.PI / 2, 0, 0.7);
-				s.position.set(dx ?? 0, 0.012, dz ?? 0);
+				s.position.set(dx ?? 0, 0.02, dz ?? 0);
 				g.add(s);
 			}
 			const p = tileCenter(arena, k);
@@ -166,7 +184,7 @@ export class Board {
 				const sm = new THREE.Matrix4().compose(
 					new THREE.Vector3(
 						p.x + (di ?? 0) * (CELL / 2 + 0.16),
-						-0.08,
+						WATER_Y + 0.06,
 						p.y + (dj ?? 0) * (CELL / 2 + 0.16),
 					),
 					new THREE.Quaternion().setFromEuler(
@@ -294,6 +312,24 @@ export class Board {
 	}
 
 	/**
+	 * The snow cap's matrix for tile `k` (follows the tile when it sinks).
+	 *
+	 * @param {number} k
+	 * @param {number} sink
+	 * @param {number} shake
+	 * @param {number} tilt
+	 */
+	capMatrix(k, sink, shake, tilt) {
+		const p = tileCenter(this.arena, k);
+		const top = levelHeight(this.arena, k);
+		return new THREE.Matrix4().compose(
+			new THREE.Vector3(p.x + shake, top - sink * (top + 1.4), p.y),
+			new THREE.Quaternion().setFromEuler(new THREE.Euler(tilt, 0, tilt * 0.6)),
+			new THREE.Vector3(1, 1, 1),
+		);
+	}
+
+	/**
 	 * @param {number} t Match time.
 	 * @param {number} time Seconds since load.
 	 * @param {string[]} ballKinds Each giant snowball's state.
@@ -309,15 +345,19 @@ export class Board {
 			const s = tileSink(arena, k, t);
 			const shake = s.warn ? Math.sin(time * 45 + k) * 0.05 : 0;
 			this.tileMesh.setMatrixAt(i, this.tileMatrix(k, s.sink, shake, s.sink * 0.25));
+			this.snowMesh.setMatrixAt(i, this.capMatrix(k, s.sink, shake, s.sink * 0.25));
 			const base = this.tints[i] ?? c;
 			c.copy(base);
 			if (s.warn && Math.floor(time * 8) % 2 === 0) c.setRGB(0.7, 0.88, 1);
 			this.tileMesh.setColorAt(i, c);
+			this.snowMesh.setColorAt(i, c);
 			dirty = true;
 		});
 		if (dirty) {
 			this.tileMesh.instanceMatrix.needsUpdate = true;
 			if (this.tileMesh.instanceColor) this.tileMesh.instanceColor.needsUpdate = true;
+			this.snowMesh.instanceMatrix.needsUpdate = true;
+			if (this.snowMesh.instanceColor) this.snowMesh.instanceColor.needsUpdate = true;
 			// Surf and shine go with their tile.
 			const zero = new THREE.Matrix4().makeScale(0, 0, 0);
 			this.strips.forEach((s, i) => {

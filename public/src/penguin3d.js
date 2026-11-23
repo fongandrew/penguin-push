@@ -99,6 +99,7 @@ function part(geo, mat, pos, rot = [0, 0, 0]) {
  * @property {THREE.Mesh} handBall
  * @property {THREE.Object3D | null} spinner Propeller.
  * @property {THREE.Object3D | null} sway Scarf tail / cape.
+ * @property {'tail' | 'cape'} swayKind
  * @property {string} lookKey
  * @property {number} phase
  * @property {number} blinkAt
@@ -128,12 +129,12 @@ export function buildPenguin(look) {
 	root.add(footL, footR);
 
 	const hatSlot = new THREE.Group();
-	hatSlot.position.set(0, 0.25, -0.01);
+	hatSlot.position.set(0, 0.29, -0.01);
 	head.add(hatSlot);
 	const faceSlot = new THREE.Group();
 	head.add(faceSlot);
 	const neckSlot = new THREE.Group();
-	neckSlot.position.set(0, 0.8, 0);
+	neckSlot.position.set(0, 0.78, 0);
 	body.add(neckSlot);
 	const species = new THREE.Group();
 	body.add(species);
@@ -174,6 +175,7 @@ export function buildPenguin(look) {
 		handBall,
 		spinner: null,
 		sway: null,
+		swayKind: 'tail',
 		lookKey: '',
 		phase: Math.random() * 10,
 		blinkAt: 1 + Math.random() * 3,
@@ -232,22 +234,29 @@ export function setLook(rig, look) {
 	}
 	if (sp.face === 'emperor') {
 		const gold = toon(0xffb23d);
-		head.add(blob(gold, [0.08, 0.13, 0.06], [0.26, -0.1, 0.08], true));
-		head.add(blob(gold, [0.08, 0.13, 0.06], [-0.26, -0.1, 0.08], true));
-		rig.species.add(blob(toon(0xffe7a8), [0.2, 0.1, 0.1], [0, 0.8, 0.26], true));
+		// Golden ear patches, kept up on the head clear of any scarf.
+		head.add(blob(gold, [0.06, 0.1, 0.05], [0.25, -0.03, 0.09], true));
+		head.add(blob(gold, [0.06, 0.1, 0.05], [-0.25, -0.03, 0.09], true));
+		rig.species.add(blob(toon(0xffe7a8), [0.16, 0.08, 0.06], [0, 0.66, 0.31], true));
 		head.add(blob(white, [0.2, 0.15, 0.12], [0, -0.1, 0.2]));
 	}
 	if (sp.face === 'gentoo') {
-		head.add(blob(white, [0.12, 0.05, 0.08], [0, 0.2, 0.17], true));
+		// The white "bonnet" patches above each eye.
+		for (const side of [1, -1]) {
+			const patch = blob(white, [0.075, 0.035, 0.045], [0.12 * side, 0.135, 0.24], true);
+			patch.rotation.z = 0.45 * side;
+			head.add(patch);
+		}
 	}
 	if (sp.face === 'rockhopper') {
 		const yellow = toon(0xffd400);
 		for (const side of [1, -1]) {
 			const tuft = new THREE.Group();
-			tuft.position.set(0.12 * side, 0.15, 0.2);
+			// Low and swept back, so they peek out under any hat.
+			tuft.position.set(0.15 * side, 0.09, 0.2);
 			for (let i = 0; i < 3; i++) {
 				const c = part(
-					new THREE.ConeGeometry(0.025, 0.24, 6),
+					new THREE.ConeGeometry(0.022, 0.17, 6),
 					yellow,
 					[0.06 * side * i, 0.03 * i, -0.05 * i],
 					[-0.6 - i * 0.2, 0, -1.1 * side],
@@ -268,7 +277,7 @@ export function setLook(rig, look) {
 	rig.eyes = [];
 	for (const side of [1, -1]) {
 		const eye = new THREE.Group();
-		eye.position.set(0.11 * side, 0.03, 0.28);
+		eye.position.set(0.11 * side, 0.03, 0.305);
 		eye.add(
 			blob(
 				sp.face === 'rockhopper' ? toon(0x8a1020) : black,
@@ -545,21 +554,23 @@ function addNeck(rig, look) {
 			});
 			mat = m;
 		}
+		// A snug knitted scarf (squashed, not a pool ring).
 		const ring = part(
-			new THREE.TorusGeometry(0.31, 0.08, 10, 28),
+			new THREE.TorusGeometry(0.335, 0.06, 10, 32),
 			mat,
 			[0, 0, 0.0],
 			[Math.PI / 2, 0, 0],
 		);
-		ring.scale.set(1.0, 1.05, 1);
+		ring.scale.set(1.0, 1.04, 0.72);
 		s.add(ring);
 		const tail = new THREE.Group();
-		tail.position.set(0.16, -0.02, 0.27);
-		const piece = part(new THREE.BoxGeometry(0.13, 0.34, 0.05), mat, [0, -0.15, 0]);
+		tail.position.set(0.17, -0.03, 0.31);
+		const piece = part(new THREE.BoxGeometry(0.11, 0.28, 0.04), mat, [0, -0.13, 0]);
 		tail.add(piece);
 		tail.rotation.z = 0.15;
 		s.add(tail);
 		rig.sway = tail;
+		rig.swayKind = 'tail';
 	} else if (look.scarf === 3) {
 		const bow = new THREE.Group();
 		bow.position.set(0, -0.04, 0.3);
@@ -573,10 +584,11 @@ function addNeck(rig, look) {
 		s.add(
 			part(new THREE.TorusGeometry(0.29, 0.035, 8, 24), c, [0, 0.02, 0], [Math.PI / 2, 0, 0]),
 		);
+		// A cape that wraps the back (an open cone shell), not a flat board.
 		const cape = new THREE.Group();
-		cape.position.set(0, 0.0, -0.3);
-		const geo = new THREE.PlaneGeometry(0.62, 0.72, 1, 4);
-		geo.translate(0, -0.36, 0);
+		cape.position.set(0, 0.0, -0.02);
+		const geo = new THREE.CylinderGeometry(0.37, 0.56, 0.66, 20, 3, true, Math.PI - 0.95, 1.9);
+		geo.translate(0, -0.33, 0);
 		const m = new THREE.MeshToonMaterial({
 			color,
 			gradientMap: toonGradient(),
@@ -585,9 +597,9 @@ function addNeck(rig, look) {
 		const mesh = new THREE.Mesh(geo, m);
 		mesh.castShadow = true;
 		cape.add(mesh);
-		cape.rotation.x = 0.25;
 		s.add(cape);
 		rig.sway = cape;
+		rig.swayKind = 'cape';
 	}
 }
 
@@ -604,11 +616,11 @@ function addGlasses(rig, look) {
 				part(new THREE.TorusGeometry(0.075, 0.014, 6, 20), frame, [
 					0.11 * side,
 					0.03,
-					0.31,
+					0.36,
 				]),
 			);
 		}
-		s.add(part(new THREE.BoxGeometry(0.08, 0.015, 0.015), frame, [0, 0.05, 0.32]));
+		s.add(part(new THREE.BoxGeometry(0.08, 0.015, 0.015), frame, [0, 0.05, 0.37]));
 	} else if (look.glasses === 2) {
 		const dark = toon(0x111118);
 		for (const side of [1, -1]) {
@@ -616,17 +628,17 @@ function addGlasses(rig, look) {
 				part(
 					new THREE.CylinderGeometry(0.085, 0.085, 0.02, 16),
 					dark,
-					[0.11 * side, 0.03, 0.31],
+					[0.11 * side, 0.03, 0.36],
 					[Math.PI / 2, 0, 0],
 				),
 			);
 		}
-		s.add(part(new THREE.BoxGeometry(0.34, 0.025, 0.02), dark, [0, 0.07, 0.32]));
+		s.add(part(new THREE.BoxGeometry(0.34, 0.025, 0.02), dark, [0, 0.07, 0.37]));
 	} else if (look.glasses === 3) {
 		const geo = starGeometry(0.1, 0.045, 0.02);
 		const m = toon(0xff5fa8);
-		for (const side of [1, -1]) s.add(part(geo, m, [0.115 * side, 0.03, 0.3]));
-		s.add(part(new THREE.BoxGeometry(0.06, 0.02, 0.02), m, [0, 0.05, 0.31]));
+		for (const side of [1, -1]) s.add(part(geo, m, [0.115 * side, 0.03, 0.36]));
+		s.add(part(new THREE.BoxGeometry(0.06, 0.02, 0.02), m, [0, 0.05, 0.37]));
 	}
 }
 
@@ -774,10 +786,16 @@ export function animatePenguin(rig, p, time, dt, opts = {}) {
 
 	if (rig.spinner) rig.spinner.rotation.y += dt * (7 + p.speed * 5);
 	if (rig.sway) {
-		const base =
-			rig.sway === rig.neckSlot.children[rig.neckSlot.children.length - 1] ? 0.25 : 0.15;
-		rig.sway.rotation.x =
-			base + Math.min(1, p.speed / 4) * 0.7 + Math.sin(time * 5 + rig.phase) * 0.1;
+		const run = Math.min(1, p.speed / 4);
+		const flutter = Math.sin(time * 6 + rig.phase);
+		if (rig.swayKind === 'cape') {
+			// Flares out behind as you run.
+			rig.sway.rotation.x = 0.06 + run * 0.65 + flutter * (0.04 + run * 0.08);
+		} else {
+			// The scarf end flips up and out in front, never into the chest.
+			rig.sway.rotation.x = -0.08 - run * 0.5 + flutter * 0.08;
+			rig.sway.rotation.z = 0.15 + flutter * 0.05 * run;
+		}
 	}
 
 	// Blink out while invulnerable after dropping back in.

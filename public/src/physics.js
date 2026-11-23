@@ -72,6 +72,16 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 		p.vy *= 1 - 2 * dt;
 		p.x += p.vx * dt;
 		p.y += p.vy * dt;
+		// Drop into the middle of the water square, never down through the
+		// ice beside it.
+		const k = tileAt(arena, p.x, p.y);
+		if (k >= 0 && (arena.level[k] ?? -1) < 0) {
+			const c = tileCenter(arena, k);
+			const pull = Math.min(1, dt * 10);
+			p.x += (c.x - p.x) * pull;
+			p.y += (c.y - p.y) * pull;
+		}
+		pushClearOfIce(arena, p, t);
 		p.z = -1.6 * Math.min(1, p.modeMs / FALL_MS) - 0.3;
 		if (p.modeMs >= FALL_MS) res.done = true;
 		return res;
@@ -248,7 +258,7 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 		if (p.slideMs > 0) p.slideMs = 0;
 	}
 
-	p.z = heightAt(arena, p.x, p.y);
+	p.z = footHeight(arena, p.x, p.y, t);
 	p.speed = Math.hypot(p.vx - here.vx, p.vy - here.vy);
 
 	if (!supportAt(arena, p.x, p.y, t).ok) {
@@ -346,4 +356,57 @@ export function angleDiff(a, b) {
 	if (d > Math.PI) d -= Math.PI * 2;
 	if (d < -Math.PI) d += Math.PI * 2;
 	return d;
+}
+
+/**
+ * The highest ice under a penguin's feet (not just its centre), so it stands
+ * up on a step's lip rather than sinking into the step.
+ *
+ * @param {Arena} arena
+ * @param {number} x
+ * @param {number} y
+ * @param {number} t
+ */
+export function footHeight(arena, x, y, t) {
+	let h = heightAt(arena, x, y);
+	const r = PENGUIN_R * 0.6;
+	for (const [dx, dy] of [
+		[r, 0],
+		[-r, 0],
+		[0, r],
+		[0, -r],
+	]) {
+		const sx = x + (dx ?? 0);
+		const sy = y + (dy ?? 0);
+		if (supportAt(arena, sx, sy, t).ok) h = Math.max(h, heightAt(arena, sx, sy));
+	}
+	return h;
+}
+
+/**
+ * Keep a falling penguin's body out of the solid ice next to its hole (it
+ * slides off the lip rather than sinking through the block).
+ *
+ * @param {Arena} arena
+ * @param {Penguin} p
+ * @param {number} t
+ */
+function pushClearOfIce(arena, p, t) {
+	const r = PENGUIN_R * 0.85;
+	for (const [dx, dy] of [
+		[1, 0],
+		[-1, 0],
+		[0, 1],
+		[0, -1],
+	]) {
+		const sx = p.x + (dx ?? 0) * r;
+		const sy = p.y + (dy ?? 0) * r;
+		const k = tileAt(arena, sx, sy);
+		if (k < 0 || (arena.level[k] ?? -1) < 0 || !supportAt(arena, sx, sy, t).ok) continue;
+		// Solid ice that way: back off until the edge of the body clears it.
+		const c = tileCenter(arena, k);
+		const edge = dx ? c.x - (dx ?? 0) * (CELL / 2) : c.y - (dy ?? 0) * (CELL / 2);
+		if (dx) p.x = edge - (dx ?? 0) * r;
+		else p.y = edge - (dy ?? 0) * r;
+	}
 }

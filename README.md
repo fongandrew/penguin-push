@@ -10,6 +10,10 @@ online or against computer penguins, and the wins add up across a session.
 
 ![Ice Grid: an inside-out Bomberman board of ice tiles, water squares and ice blocks](docs/screenshots/ice-grid-landscape.png)
 
+| A wave sweeping Igloo Cove | Every costume |
+| --- | --- |
+| ![](docs/screenshots/igloo-cove-wave.png) | ![](docs/screenshots/costumes.png) |
+
 ## How to play
 
 - 🕹️ Put your thumb down anywhere and drag to waddle. On a keyboard: <kbd>WASD</kbd> / arrow keys. Nearly-straight snaps to straight, and walking straight eases you into the middle of your row of tiles, so bridges and corridors are easy. Let go and you stop. Getting shoved is what sends you sliding.

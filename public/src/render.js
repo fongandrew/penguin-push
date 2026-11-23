@@ -61,8 +61,8 @@ export class Renderer {
 		this.renderer.outputColorSpace = THREE.SRGBColorSpace;
 
 		this.scene = new THREE.Scene();
-		this.scene.background = new THREE.Color(0x9fdcff);
-		this.scene.fog = new THREE.Fog(0x9fdcff, 30, 70);
+		this.scene.background = skyTexture();
+		this.scene.fog = new THREE.Fog(0xa8def9, 34, 80);
 		this.camera = new THREE.PerspectiveCamera(40, 1, 0.1, 200);
 		this.camera.position.set(0, 16, 14);
 		this.camTarget = new THREE.Vector3();
@@ -277,7 +277,7 @@ export class Renderer {
 				this.spawnParticle(
 					new THREE.Vector3(
 						p.x + (Math.random() - 0.5) * CELL,
-						0.1,
+						WATER_Y + 0.1,
 						p.y + (Math.random() - 0.5) * CELL,
 					),
 					new THREE.Vector3(
@@ -291,7 +291,7 @@ export class Renderer {
 					10,
 				);
 			}
-			this.spawnRipple(new THREE.Vector3(p.x, 0.02, p.y), 1.6);
+			this.spawnRipple(new THREE.Vector3(p.x, WATER_Y + 0.05, p.y), 1.6);
 		}
 		if (prev < WALLS_CRUMBLE_MS && t >= WALLS_CRUMBLE_MS - 600) {
 			for (const b of arena.blocks) {
@@ -404,11 +404,12 @@ export class Renderer {
 		const ux = Math.cos(w.dir);
 		const uy = Math.sin(w.dir);
 		if (w.phase === 'go') {
-			this.wave.position.set(ux * w.front, Math.sin(time * 6) * 0.05, uy * w.front);
+			this.wave.position.set(ux * w.front, Math.sin(time * 5) * 0.04, uy * w.front);
+			animateSpray(this.wave, time);
 			this.wave.rotation.y = -w.dir;
 		} else {
 			const reach = (arena.R + 1.8) * shrinkAt(t);
-			this.arrows.position.set(-ux * reach, 0.15, -uy * reach);
+			this.arrows.position.set(-ux * reach, WATER_Y + 0.12, -uy * reach);
 			this.arrows.rotation.y = -w.dir;
 			const pulse = 0.85 + Math.sin(time * 12) * 0.15;
 			this.arrows.scale.setScalar(pulse);
@@ -446,6 +447,11 @@ export class Renderer {
 			);
 			const inner = g.userData['inner'];
 			if (inner instanceof THREE.Object3D) inner.rotation.y = time * 2;
+			const spark = g.userData['spark'];
+			if (spark instanceof THREE.Object3D) {
+				spark.rotation.z = time * 3;
+				spark.scale.setScalar(0.06 + 0.05 * Math.abs(Math.sin(time * 4 + i)));
+			}
 		}
 		for (const [i, g] of this.jars) {
 			if (live.has(i)) continue;
@@ -569,7 +575,7 @@ export class Renderer {
 				for (let i = 0; i < n; i++) {
 					const c = i % 3 === 0 ? 0xffffff : 0x5cc6ff;
 					this.spawnParticle(
-						at.clone().setY(0.1),
+						at.clone().setY(WATER_Y + 0.1),
 						new THREE.Vector3(rnd() * 4, 3 + Math.random() * (big ? 6 : 4), rnd() * 4),
 						c,
 						0.1 + Math.random() * 0.1,
@@ -577,7 +583,7 @@ export class Renderer {
 						12,
 					);
 				}
-				this.spawnRipple(at.clone().setY(0.05), big ? 2.4 : 1.4);
+				this.spawnRipple(at.clone().setY(WATER_Y + 0.05), big ? 2.4 : 1.4);
 				break;
 			}
 			case 'bonk':
@@ -836,6 +842,9 @@ function easeBack(k) {
 	return 1 + (c + 1) * x * x * x + c * x * x;
 }
 
+/** Mean sea level (ice tops are at 0). */
+export const WATER_Y = -0.42;
+
 function makeWater() {
 	const geo = new THREE.PlaneGeometry(140, 140, 90, 90);
 	geo.rotateX(-Math.PI / 2);
@@ -843,7 +852,7 @@ function makeWater() {
 		/** @type {Float32Array} */ (geo.attributes['position']?.array ?? []),
 	);
 	const mat = new THREE.MeshPhongMaterial({
-		color: 0x2b9be0,
+		color: 0x2a9fe6,
 		flatShading: true,
 		shininess: 90,
 		specular: 0x99ddff,
@@ -851,7 +860,8 @@ function makeWater() {
 		opacity: 0.88,
 	});
 	const mesh = new THREE.Mesh(geo, mat);
-	mesh.position.y = -0.18;
+	// Well below the ice tops so waves never poke up through the tiles.
+	mesh.position.y = WATER_Y;
 	mesh.receiveShadow = true;
 	mesh.userData['base'] = base;
 	return mesh;
@@ -869,10 +879,14 @@ function animateWater(water, time) {
 	for (let i = 0; i < arr.length; i += 3) {
 		const x = base[i] ?? 0;
 		const z = base[i + 2] ?? 0;
+		// Calm by the ice (the surf stays put), choppier out at sea.
+		const d = Math.hypot(x, z);
+		const amp = 0.35 + 0.65 * Math.min(1, Math.max(0, (d - 7) / 10));
 		arr[i + 1] =
-			Math.sin(x * 0.45 + time * 1.3) * 0.09 +
-			Math.cos(z * 0.5 + time * 1.1) * 0.09 +
-			Math.sin((x + z) * 0.9 + time * 2.2) * 0.04;
+			amp *
+			(Math.sin(x * 0.45 + time * 1.3) * 0.09 +
+				Math.cos(z * 0.5 + time * 1.1) * 0.09 +
+				Math.sin((x + z) * 0.9 + time * 2.2) * 0.04);
 	}
 	attr.needsUpdate = true;
 }
@@ -1021,54 +1035,88 @@ function makeGiantSnowball() {
  */
 function makeJar(kind) {
 	const g = new THREE.Group();
+	const tint = kind === 'heart' ? 0xff6f91 : 0x3d9bff;
+	// A rounded jar: base, belly, shoulder, neck.
+	const profile = [
+		[0, 0],
+		[0.24, 0],
+		[0.31, 0.08],
+		[0.34, 0.3],
+		[0.3, 0.48],
+		[0.21, 0.56],
+		[0.21, 0.62],
+	].map(([x, y]) => new THREE.Vector2(x ?? 0, y ?? 0));
+	const jarGeo = new THREE.LatheGeometry(profile, 24);
 	const glass = new THREE.Mesh(
-		new THREE.CylinderGeometry(0.3, 0.27, 0.5, 18),
+		jarGeo,
 		new THREE.MeshPhongMaterial({
-			color: 0xbfe9ff,
+			color: 0xdff6ff,
+			emissive: 0x2a5a7a,
 			transparent: true,
-			opacity: 0.38,
-			shininess: 120,
+			opacity: 0.45,
+			shininess: 140,
+			specular: 0xffffff,
 			depthWrite: false,
 		}),
 	);
-	glass.position.y = 0.3;
 	g.add(glass);
-	const lid = new THREE.Mesh(
-		new THREE.CylinderGeometry(0.32, 0.32, 0.09, 18),
-		toon(kind === 'heart' ? 0xff6f91 : 0x3d9bff),
+	// A pale rim drawn on the back faces: reads as glass against white snow.
+	const rim = new THREE.Mesh(
+		jarGeo,
+		new THREE.MeshBasicMaterial({
+			color: 0x9fd8f5,
+			transparent: true,
+			opacity: 0.55,
+			side: THREE.BackSide,
+			depthWrite: false,
+		}),
 	);
-	lid.position.y = 0.58;
+	rim.scale.setScalar(1.04);
+	g.add(rim);
+	const lid = new THREE.Mesh(new THREE.CylinderGeometry(0.24, 0.24, 0.1, 20), toon(tint));
+	lid.position.y = 0.66;
 	lid.castShadow = true;
 	g.add(lid);
-	const knob = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), toon(0xffffff));
-	knob.position.y = 0.65;
+	const knob = new THREE.Mesh(new THREE.SphereGeometry(0.07, 10, 8), toon(0xffffff));
+	knob.position.y = 0.74;
 	g.add(knob);
 	const inner = new THREE.Group();
 	inner.position.y = 0.3;
 	if (kind === 'heart') {
-		const h = new THREE.Mesh(heartGeometry(), toon(0xff3d5e, { emissive: 0x440010 }));
-		h.scale.setScalar(0.3);
+		const h = new THREE.Mesh(heartGeometry(), toon(0xff3d5e, { emissive: 0x551020 }));
+		h.scale.setScalar(0.42);
 		inner.add(h);
 	} else {
-		const body = new THREE.Mesh(new THREE.SphereGeometry(1, 12, 8), toon(0xffa53a));
-		body.scale.set(0.16, 0.09, 0.06);
-		inner.add(body);
-		const tail = new THREE.Mesh(new THREE.ConeGeometry(0.07, 0.12, 4), toon(0xffa53a));
+		const fish = new THREE.Group();
+		const orange = toon(0xff9a2a, { emissive: 0x331500 });
+		const body = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), orange);
+		body.scale.set(0.2, 0.12, 0.08);
+		fish.add(body);
+		const tail = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.15, 4), orange);
 		tail.rotation.z = Math.PI / 2;
-		tail.position.x = -0.19;
-		inner.add(tail);
-		const eye = new THREE.Mesh(new THREE.SphereGeometry(0.02, 6, 4), toon(0x111111));
-		eye.position.set(0.1, 0.025, 0.05);
-		inner.add(eye);
+		tail.position.x = -0.24;
+		fish.add(tail);
+		for (const side of [1, -1]) {
+			const eye = new THREE.Mesh(new THREE.SphereGeometry(0.025, 8, 6), toon(0x111111));
+			eye.position.set(0.12, 0.03, 0.065 * side);
+			fish.add(eye);
+		}
+		inner.add(fish);
 	}
 	g.add(inner);
 	g.userData['inner'] = inner;
+	// A twinkle above, so jars catch the eye.
+	const spark = new THREE.Mesh(STAR_GEO, toon(0xfff3a0, { emissive: 0x806a00 }));
+	spark.scale.setScalar(0.09);
+	spark.position.set(0.22, 0.95, 0);
+	g.add(spark);
+	g.userData['spark'] = spark;
 	const glow = new THREE.Mesh(
-		new THREE.CircleGeometry(0.5, 24),
+		new THREE.CircleGeometry(0.55, 24),
 		new THREE.MeshBasicMaterial({
-			color: kind === 'heart' ? 0xff8fb0 : 0x8fd0ff,
+			color: tint,
 			transparent: true,
-			opacity: 0.45,
+			opacity: 0.35,
 			depthWrite: false,
 		}),
 	);
@@ -1078,40 +1126,131 @@ function makeJar(kind) {
 	return g;
 }
 
+/**
+ * A curling wave: a cross-section (back slope, crest, curl, steep front)
+ * extruded along the whole front, tapering away at the ends, with a foamy
+ * white crest.
+ */
 function makeWave() {
 	const g = new THREE.Group();
-	const body = new THREE.Mesh(
-		new THREE.CapsuleGeometry(0.55, 26, 6, 12),
-		new THREE.MeshPhongMaterial({
-			color: 0x3fb3ff,
+	const s = new THREE.Shape();
+	// Deep below the sea surface so it never shows a gap, and tall enough
+	// to tower over the ice as it sweeps across.
+	const base = WATER_Y - 0.6;
+	const H = (/** @type {number} */ y) => y * 1.55;
+	s.moveTo(-3.0, base);
+	s.bezierCurveTo(-1.8, base + 0.1, -0.9, H(0.35), -0.25, H(0.85));
+	s.bezierCurveTo(0.1, H(1.15), 0.6, H(1.25), 0.9, H(1.05));
+	s.bezierCurveTo(1.05, H(0.9), 0.95, H(0.72), 0.7, H(0.78));
+	s.bezierCurveTo(0.5, H(0.8), 0.42, H(0.6), 0.46, H(0.3));
+	s.bezierCurveTo(0.5, 0.0, 0.7, base + 0.2, 1.0, base);
+	s.closePath();
+	const len = 30;
+	const geo = new THREE.ExtrudeGeometry(s, {
+		depth: len,
+		bevelEnabled: false,
+		steps: 30,
+		curveSegments: 10,
+	});
+	geo.translate(0, 0, -len / 2);
+	// Taper the height toward both ends so it fades into the sea.
+	const pos = geo.attributes['position'];
+	if (pos) {
+		for (let i = 0; i < pos.count; i++) {
+			const z = Math.abs(pos.getZ(i));
+			const f = Math.min(1, Math.max(0, (len / 2 - z) / 6));
+			const k = f * f * (3 - 2 * f);
+			pos.setY(i, base + (pos.getY(i) - base) * k);
+		}
+		geo.computeVertexNormals();
+	}
+	// Colour by height: deep blue at the bottom, turquoise up the face, and
+	// the curling lip turning to white foam — one smooth surface, no blobs.
+	if (pos) {
+		const deep = new THREE.Color(0x1f7fd1);
+		const mid = new THREE.Color(0x46c4ff);
+		const foam = new THREE.Color(0xf4fbff);
+		const top = 1.95;
+		const col = [];
+		const c = new THREE.Color();
+		for (let i = 0; i < pos.count; i++) {
+			const x = pos.getX(i);
+			const z = Math.abs(pos.getZ(i));
+			const fade = Math.min(1, Math.max(0, (len / 2 - z) / 6));
+			const tt = Math.min(1, Math.max(0, (pos.getY(i) - base) / (top - base)));
+			c.copy(deep).lerp(mid, Math.min(1, tt * 1.4));
+			// Foam on the lip and the curl's underside.
+			const lip = Math.max(0, (tt - 0.72) / 0.28) + (x > 0.45 && tt > 0.5 ? 0.6 : 0);
+			c.lerp(foam, Math.min(1, lip) * fade);
+			col.push(c.r, c.g, c.b);
+		}
+		geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
+	}
+	const water = new THREE.MeshPhongMaterial({
+		vertexColors: true,
+		transparent: true,
+		opacity: 0.86,
+		shininess: 110,
+		specular: 0xe6f8ff,
+		side: THREE.DoubleSide,
+	});
+	const body = new THREE.Mesh(geo, water);
+	g.add(body);
+	// Fine spray drifting off the crest: soft, small, see-through.
+	const n = 260;
+	const spray = new THREE.Points(
+		new THREE.BufferGeometry().setAttribute(
+			'position',
+			new THREE.BufferAttribute(new Float32Array(n * 3), 3),
+		),
+		new THREE.PointsMaterial({
+			color: 0xffffff,
+			size: 0.16,
 			transparent: true,
-			opacity: 0.85,
-			shininess: 80,
-			flatShading: true,
+			opacity: 0.75,
+			depthWrite: false,
 		}),
 	);
-	body.rotation.x = Math.PI / 2;
-	body.scale.set(1, 1, 1.4);
-	body.position.y = 0.2;
-	g.add(body);
-	const crest = new THREE.Mesh(
-		new THREE.CapsuleGeometry(0.28, 26, 4, 8),
-		new THREE.MeshPhongMaterial({ color: 0xffffff, flatShading: true }),
-	);
-	crest.rotation.x = Math.PI / 2;
-	crest.position.set(0.25, 0.75, 0);
-	g.add(crest);
+	spray.userData['seeds'] = Array.from({ length: n }, () => ({
+		z: (Math.random() - 0.5) * (len - 8),
+		phase: Math.random(),
+		speed: 0.6 + Math.random() * 0.8,
+		drift: Math.random(),
+	}));
+	spray.userData['base'] = base;
+	g.add(spray);
+	g.userData['spray'] = spray;
 	return g;
 }
 
+/** Pulsing warning chevrons on the water, pointing the way the wave will go. */
 function makeArrows() {
 	const g = new THREE.Group();
-	const mat = new THREE.MeshBasicMaterial({ color: 0xff3d5e });
-	for (let i = -2; i <= 2; i++) {
-		const c = new THREE.Mesh(new THREE.ConeGeometry(0.4, 0.9, 3), mat);
-		c.rotation.z = -Math.PI / 2;
-		c.position.set(0, 0, i * 2.2);
-		g.add(c);
+	const s = new THREE.Shape();
+	s.moveTo(-0.35, -0.55);
+	s.lineTo(0.45, 0);
+	s.lineTo(-0.35, 0.55);
+	s.lineTo(-0.1, 0);
+	s.closePath();
+	const geo = new THREE.ShapeGeometry(s);
+	geo.rotateX(-Math.PI / 2);
+	const mat = new THREE.MeshBasicMaterial({ color: 0xff2d55, depthWrite: false, fog: false });
+	const rim = new THREE.MeshBasicMaterial({
+		color: 0xffffff,
+		transparent: true,
+		opacity: 0.9,
+		depthWrite: false,
+	});
+	for (let i = -3; i <= 3; i++) {
+		for (let j = 0; j < 2; j++) {
+			const back = new THREE.Mesh(geo, rim);
+			back.scale.setScalar(1.25);
+			back.position.set(j * 0.9 - 0.05, -0.01, i * 2.0);
+			g.add(back);
+			const c = new THREE.Mesh(geo, mat);
+			c.position.set(j * 0.9, 0, i * 2.0);
+			g.add(c);
+		}
 	}
 	return g;
 }
@@ -1253,4 +1392,50 @@ export class Portraits {
 			return '';
 		}
 	}
+}
+
+/** A soft vertical sky gradient for the background. */
+function skyTexture() {
+	const cv = document.createElement('canvas');
+	cv.width = 4;
+	cv.height = 256;
+	const g = cv.getContext('2d');
+	if (g) {
+		const grad = g.createLinearGradient(0, 0, 0, 256);
+		grad.addColorStop(0, '#6ec3f5');
+		grad.addColorStop(0.55, '#a8def9');
+		grad.addColorStop(1, '#d9f2ff');
+		g.fillStyle = grad;
+		g.fillRect(0, 0, 4, 256);
+	}
+	const tex = new THREE.CanvasTexture(cv);
+	tex.colorSpace = THREE.SRGBColorSpace;
+	return tex;
+}
+
+/**
+ * Drift the wave's spray up and forward off the crest, looping.
+ *
+ * @param {THREE.Group} wave
+ * @param {number} time
+ */
+function animateSpray(wave, time) {
+	const spray = wave.userData['spray'];
+	if (!(spray instanceof THREE.Points)) return;
+	const seeds = /** @type {{ z: number, phase: number, speed: number, drift: number }[]} */ (
+		spray.userData['seeds']
+	);
+	const attr = spray.geometry.attributes['position'];
+	if (!attr) return;
+	const arr = /** @type {Float32Array} */ (attr.array);
+	seeds.forEach((s, i) => {
+		const k = (time * s.speed + s.phase) % 1;
+		const fade = Math.min(1, Math.max(0, (15 - Math.abs(s.z)) / 6));
+		arr[i * 3] = 0.9 + k * (0.8 + s.drift * 0.6);
+		arr[i * 3 + 1] =
+			(1.75 + Math.sin(k * Math.PI) * (0.5 + s.drift * 0.4) - k * 0.6) * fade +
+			(1 - fade) * -0.4;
+		arr[i * 3 + 2] = s.z + Math.sin(time * 2 + i) * 0.1;
+	});
+	attr.needsUpdate = true;
 }
