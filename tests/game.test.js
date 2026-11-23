@@ -143,6 +143,37 @@ describe('match rules', () => {
 		expect(Math.hypot(me.x - x0, me.y - y0)).toBeGreaterThan(1.5);
 	});
 
+	it('a giant snowball ploughs you all the way into the sea, from anywhere in its lane', () => {
+		for (const along of [1.5, 4, 6.5]) {
+			for (const side of [0, 0.6]) {
+				const s = soloMatch('hill', 5, 0);
+				const arena = s.arena;
+				const me = s.penguins[0];
+				const home = arena?.balls[0];
+				if (!arena || !me || !home) throw new Error('setup');
+				for (const p of s.penguins.slice(1)) {
+					p.x = 30;
+					p.mode = 'out';
+				}
+				me.x = home.x + side;
+				me.y = home.y + along;
+				me.invulnMs = 0;
+				new SoloLink(s).claim({ type: 'kick', ball: 0, angle: Math.PI / 2, by: 1, t: 0 });
+				const own = {
+					owns: (/** @type {number} */ pid) => pid === 0,
+					send: () => {},
+					claim: () => {},
+				};
+				let fell = false;
+				for (let i = 0; i < 300 && !fell; i++) {
+					tick(s, own, s.t + STEP * 1000, STEP, IDLE);
+					fell = me.mode !== 'play';
+				}
+				expect(fell).toBe(true);
+			}
+		}
+	});
+
 	it('plays out a whole computer-only match on every map', () => {
 		for (const map of ['hill', 'floes', 'cove', 'grid']) {
 			const s = soloMatch(map, 77);

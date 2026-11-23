@@ -411,21 +411,47 @@ function giantSnowballs(state, link, p, t) {
 		}
 		if (b.kind !== 'roll') return;
 		const key = `ball:${i}:${b.kick.t}`;
-		if (p.hitBy.has(key)) return;
 		const dx = p.x - b.x;
 		const dy = p.y - b.y;
 		const d = Math.hypot(dx, dy);
-		if (d > BALL_R + PENGUIN_R || p.z > 1.5 + (b.roll ? 0 : 0)) return;
+		const reach = BALL_R + PENGUIN_R;
+		if (d > reach || p.z > 1.5 || p.invulnMs > 0) return;
 		const sp = Math.hypot(b.vx, b.vy);
 		if (sp < 0.8) return;
-		p.hitBy.add(key);
-		const fx = (b.vx / sp) * 0.7 + (dx / (d || 1)) * 0.5;
-		const fy = (b.vy / sp) * 0.7 + (dy / (d || 1)) * 0.5;
-		const n = Math.hypot(fx, fy) || 1;
-		const power = BALL_HIT * Math.min(1.2, 0.5 + sp / 8);
-		if (knock(p, (fx / n) * power, (fy / n) * power, 500)) {
+		const ux = b.vx / sp;
+		const uy = b.vy / sp;
+		const along = dx * ux + dy * uy;
+		const side = -dx * uy + dy * ux;
+		if (along < -0.2) return; // it's already rolled past you
+		const first = !p.hitBy.has(key);
+		if (Math.abs(side) > reach * 0.75) {
+			// A glancing blow: spun out sideways, once.
+			if (!first) return;
+			p.hitBy.add(key);
+			const power = BALL_HIT * 0.6;
+			const nx = dx / (d || 1);
+			const ny = dy / (d || 1);
+			if (knock(p, nx * power, ny * power, 400))
+				state.fx.push({ kind: 'bonk', x: p.x, y: p.y, pid: p.id });
+			return;
+		}
+		// Square on: the snowball ploughs you along in front of it until you
+		// go over the edge.
+		if (first) {
+			p.hitBy.add(key);
+			knock(p, 0, 0, 500);
 			state.fx.push({ kind: 'bonk', x: p.x, y: p.y, pid: p.id });
 		}
+		const keep = side;
+		p.x = b.x + ux * (reach + 0.02) - uy * keep;
+		p.y = b.y + uy * (reach + 0.02) + ux * keep;
+		const pv = p.vx * ux + p.vy * uy;
+		const push = Math.max(pv, sp * 1.1 + 0.6);
+		const lat = (-p.vx * uy + p.vy * ux) * 0.5;
+		p.vx = ux * push - uy * lat;
+		p.vy = uy * push + ux * lat;
+		p.knockMs = Math.max(p.knockMs, 250);
+		p.slideMs = 0;
 	});
 }
 
