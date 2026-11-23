@@ -10,7 +10,9 @@ async function player(browser, name) {
 	const ctx = await browser.newContext({ viewport: { width: 390, height: 700 } });
 	await ctx.addInitScript((n) => localStorage.setItem('penguin-push:name', n), name);
 	const page = await ctx.newPage();
-	await page.goto('/');
+	// This spec only reads game state: skip the 3D drawing so two browsers
+	// running at once don't starve each other (or the relay sockets) of CPU.
+	await page.goto('/?render=0');
 	return page;
 }
 
@@ -33,6 +35,8 @@ test('two friends play a match and share a leaderboard', async ({ browser }) => 
 	await b.waitForFunction(() => window.__game.online().session.settings.bots === 1);
 
 	await a.click('#btn-lobby-start');
+	// Both screens must have the match before we compare rosters.
+	await a.waitForFunction(() => window.__game.screen() === 'game');
 	await b.waitForFunction(() => window.__game.screen() === 'game');
 	const rosterA = await a.evaluate(() => JSON.stringify(window.__game.state.roster));
 	const rosterB = await b.evaluate(() => JSON.stringify(window.__game.state.roster));

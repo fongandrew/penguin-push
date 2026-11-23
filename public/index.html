@@ -27,7 +27,11 @@
 		<section id="hud" hidden>
 			<div id="top">
 				<div id="cards"></div>
-				<div id="clock"></div>
+				<div class="toprow">
+					<button id="btn-quit" aria-label="Pause / leave match">⏸</button>
+					<div id="clock"></div>
+					<span class="toprow-pad"></span>
+				</div>
 				<div id="banner" hidden></div>
 			</div>
 			<div id="toast" hidden></div>
@@ -39,7 +43,6 @@
 			<button id="btn-push" class="act push" aria-label="Push">
 				<span class="icon">👋</span><span class="lbl">Push!</span><span class="key">Space</span>
 			</button>
-			<button id="btn-quit" class="corner" aria-label="Leave match">✕</button>
 		</section>
 
 		<section class="screen" id="title">
@@ -148,6 +151,17 @@
 				</div>
 			</div>
 		</section>
+
+		<div class="screen" id="leave" hidden role="dialog" aria-modal="true" aria-labelledby="leave-title">
+			<div class="panel">
+				<h2 id="leave-title">Leave this match?</h2>
+				<p class="hint" id="leave-note"></p>
+				<div class="stack">
+					<button class="big primary" id="btn-stay">Keep playing</button>
+					<button class="small" id="btn-leave">Leave match</button>
+				</div>
+			</div>
+		</div>
 
 		<div id="netstatus" hidden></div>
 		<button id="btn-mute" class="corner right" aria-label="Sound">🔊</button>

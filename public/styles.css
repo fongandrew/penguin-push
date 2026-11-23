@@ -985,9 +985,35 @@ body.on-station #btn-mute {
 	box-shadow: 0 3px 0 #9ab7cc;
 }
 
-#hud .corner {
-	top: auto;
-	bottom: calc(14px + var(--safe-bottom));
+/* Pause sits beside the clock: far from the steering thumb. */
+.toprow {
+	display: grid;
+	grid-template-columns: 40px auto 40px;
+	align-items: center;
+	gap: 10px;
+}
+
+#btn-quit {
+	width: 36px;
+	height: 36px;
+	border-radius: 50%;
+	background: var(--panel);
+	box-shadow: 0 3px 0 #9ab7cc;
+	font-size: 16px;
+	pointer-events: auto;
+}
+
+#leave {
+	z-index: 30;
+	background: rgba(16, 48, 84, 0.45);
+}
+
+#leave .panel {
+	width: min(360px, 100%);
+}
+
+#leave .stack .big {
+	min-width: 220px;
 }
 
 .corner.right {

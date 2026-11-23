@@ -62,6 +62,8 @@ export function start() {
 
 	/** @type {Screen} */
 	let screen = 'title';
+	/** The leave-match dialog is open (solo play is paused meanwhile). */
+	let leaving = false;
 	/** Where the changing station's main button leads. */
 	/** @type {'new' | 'lobby' | 'results'} */
 	let stationMode = 'new';
@@ -109,6 +111,10 @@ export function start() {
 	/** @param {Screen} next */
 	function go(next) {
 		screen = next;
+		if (leaving) {
+			leaving = false;
+			$('leave').hidden = true;
+		}
 		showScreen(next);
 		controls.setEnabled(next === 'game');
 		if (next === 'station') drawStation();
@@ -356,14 +362,15 @@ export function start() {
 		history.replaceState(null, '', url);
 		client.connect();
 		go('lobby');
-		// Give up only if the connection is actually failing (retrying), not
-		// just slow: a busy phone on a poor network can take a while to open
-		// the first socket. Hard stop after JOIN_MAX_MS either way.
+		// Keep trying while the client is connecting or reconnecting: a busy
+		// phone on a poor network can take a while, and a retry that gets
+		// through is a success. A definite "no such room" / "room full" from
+		// the server fails at once (onError); otherwise stop after JOIN_MAX_MS.
 		const started = Date.now();
 		const check = () => {
 			if (welcomed || online?.client !== client) return;
-			const slow = client.state === 'connecting' || client.state === 'live';
-			if (slow && Date.now() - started < JOIN_MAX_MS) {
+			const trying = client.state !== 'failed' && client.state !== 'idle';
+			if (trying && Date.now() - started < JOIN_MAX_MS) {
 				setTimeout(check, 1000);
 				return;
 			}
@@ -461,7 +468,19 @@ export function start() {
 		state.arena = null;
 		go('title');
 	});
-	click('btn-quit', () => {
+	/** @param {boolean} open */
+	function showLeave(open) {
+		leaving = open;
+		$('leave').hidden = !open;
+		$('leave-note').textContent = online
+			? 'You’ll leave the room. The match carries on for everyone else.'
+			: 'Game paused. Leaving ends this round.';
+		controls.setEnabled(!open && screen === 'game');
+	}
+	click('btn-quit', () => showLeave(true));
+	click('btn-stay', () => showLeave(false));
+	click('btn-leave', () => {
+		showLeave(false);
 		if (online) {
 			leaveRoom();
 			go('title');
@@ -471,6 +490,10 @@ export function start() {
 			state.mode = 'idle';
 			go('solo');
 		}
+	});
+	addEventListener('keydown', (e) => {
+		if (e.key !== 'Escape' || screen !== 'game') return;
+		showLeave(!leaving);
 	});
 	const music = $('btn-music');
 	const drawMusic = () => {
@@ -498,6 +521,8 @@ export function start() {
 
 	let last = performance.now();
 	let time = 0;
+	/** Tests that only read game state can skip the 3D drawing (?render=0). */
+	const draw3d = new URLSearchParams(location.search).get('render') !== '0';
 	/** @type {Input} */
 	const idle = { mx: 0, my: 0, shove: false, power: false };
 
@@ -535,7 +560,8 @@ export function start() {
 		playSong(songFor());
 
 		if (screen === 'station') {
-			renderer.renderStation(state.look, time, dt, innerWidth / innerHeight < 0.9);
+			if (draw3d)
+				renderer.renderStation(state.look, time, dt, innerWidth / innerHeight < 0.9);
 			return;
 		}
 		const live = (screen === 'game' || screen === 'results') && state.arena && link;
@@ -543,17 +569,18 @@ export function start() {
 			const input = controls.read();
 			let target;
 			if (online) target = online.session.matchTime();
+			else if (leaving) target = soloClock;
 			else target = soloClock += dtMs;
 			advance(state, link, target, input);
 			playFx(state);
 			drawHud();
-			renderer.renderGame(state, time, dt);
+			if (draw3d) renderer.renderGame(state, time, dt);
 			state.fx.length = 0;
 			if (screen === 'game' && celebrationOver(state)) showResults();
 			return;
 		}
 		advance(demo, demoLink, demo.t + dtMs, idle);
-		renderer.renderGame(demo, time, dt, { attract: true });
+		if (draw3d) renderer.renderGame(demo, time, dt, { attract: true });
 		demo.fx.length = 0;
 		if (celebrationOver(demo)) startDemo();
 	}

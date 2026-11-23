@@ -72,7 +72,9 @@ test('title → changing station → solo match → leaderboard', async ({ page 
 			g.teleport(p.id, 40, 0);
 		}
 	});
-	await expect(page.locator('#results')).toBeVisible({ timeout: 20000 });
+	// Game time is capped per frame, so on a slow software renderer the fall
+	// and the winner's dance can take a while in real time.
+	await expect(page.locator('#results')).toBeVisible({ timeout: 60000 });
 	await expect(page.locator('#results-title')).toContainText('You win');
 	await expect(page.locator('#board tbody tr')).toHaveCount(4);
 
