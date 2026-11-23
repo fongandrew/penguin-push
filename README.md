@@ -13,6 +13,7 @@ online or against computer penguins, and the wins add up across a session.
 ## How to play
 
 - 🕹️ Put your thumb down anywhere and drag to waddle. On a keyboard: <kbd>WASD</kbd> / arrow keys. Nearly-straight snaps to straight, and walking straight eases you into the middle of your row of tiles, so bridges and corridors are easy. Let go and you stop. Getting shoved is what sends you sliding.
+- 😬 Walk to the edge by accident and your penguin **teeters**, flapping its flippers. Let go or turn back within about half a second and you're safe; keep pushing toward the water and in you go. Getting shoved, belly-sliding or standing on polished ice gives no second chance. The computer penguins teeter too, and now and then a clumsy one blunders in on its own.
 - 👋 **Push!** (<kbd>Space</kbd>) slaps everyone in front of you with your flippers.
 - ✨ The blue power button (<kbd>E</kbd>, or <kbd>Shift</kbd>/<kbd>Q</kbd>/<kbd>F</kbd>/<kbd>Enter</kbd>) uses your power. On a computer the buttons show their keys, and picking up a power tells you which key to press.
 - ❤️ You start with 5 lives. Fall in and you lose one, then drop back in from the sky.

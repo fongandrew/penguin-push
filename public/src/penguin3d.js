@@ -701,6 +701,14 @@ export function animatePenguin(rig, p, time, dt, opts = {}) {
 		flapR = 1.5 + Math.sin(time * 30 + 1) * 0.4;
 		body.rotation.x = -0.2;
 	}
+	if (p.teeterMs > 0 && p.mode === 'play') {
+		// Whoa-whoa-whoa: windmilling flippers, leaning back from the edge.
+		flapL = 1.4 + Math.sin(time * 26) * 0.6;
+		flapR = 1.4 + Math.sin(time * 26 + Math.PI) * 0.6;
+		fwdL = Math.sin(time * 26) * 0.8;
+		fwdR = -Math.sin(time * 26) * 0.8;
+		body.rotation.x = -0.25 + Math.sin(time * 18) * 0.12;
+	}
 	rig.stars.visible = p.stunMs > 0 && p.mode === 'play';
 	if (rig.stars.visible) {
 		rig.stars.rotation.y = time * 5;

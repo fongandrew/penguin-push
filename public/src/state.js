@@ -43,6 +43,7 @@ import { defaultLook } from './looks.js';
  * @property {number} shoveMs Flipper-slap animation.
  * @property {number} cooldownMs Until the next shove.
  * @property {number} slideMs Belly slide remaining.
+ * @property {number} teeterMs How long it's been wobbling at the edge (0 = not).
  * @property {number} megaMs Mega flippers remaining.
  * @property {PowerKind} power
  * @property {number} uses Power uses left.
@@ -181,6 +182,7 @@ export function makePenguin(id, name, look, spot, bot) {
 		shoveMs: 0,
 		cooldownMs: 0,
 		slideMs: 0,
+		teeterMs: 0,
 		megaMs: 0,
 		power: '',
 		uses: 0,

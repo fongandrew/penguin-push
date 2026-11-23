@@ -225,3 +225,53 @@ describe('computer penguins', () => {
 		}
 	});
 });
+
+describe('teetering at the edge', () => {
+	/** Our penguin on a tile with water immediately to its east. */
+	function atEdge() {
+		const s = soloMatch('grid', 5, 0);
+		const link = onlyMe(s);
+		const me = s.penguins[0];
+		const arena = s.arena;
+		if (!me || !arena) throw new Error('setup');
+		for (const p of s.penguins.slice(1)) p.x = 99;
+		const k = arena.level.findIndex(
+			(l, k) =>
+				l === 0 &&
+				!arena.block[k] &&
+				!arena.block[k - 1] &&
+				(arena.level[k - 1] ?? -1) === 0 &&
+				(arena.level[k + 1] ?? 0) < 0 &&
+				k % arena.n < arena.n - 1,
+		);
+		const c = tileCenter(arena, k);
+		me.x = c.x - 0.3;
+		me.y = c.y;
+		me.invulnMs = 0;
+		return { s, link, me };
+	}
+
+	it('catches you at the brink when you walk off by accident', () => {
+		const { s, link, me } = atEdge();
+		run(s, link, 250, { ...IDLE, mx: 1 });
+		expect(me.mode).toBe('play');
+		expect(me.teeterMs).toBeGreaterThan(0);
+		// Let go (or turn back) and you're safe.
+		run(s, link, 800);
+		expect(me.mode).toBe('play');
+		expect(me.teeterMs).toBe(0);
+	});
+
+	it('still lets you fall in if you keep walking into the water', () => {
+		const { s, link, me } = atEdge();
+		run(s, link, 900, { ...IDLE, mx: 1 });
+		expect(me.mode).toBe('fall');
+	});
+
+	it('gives no second chance when you are shoved', () => {
+		const { s, link, me } = atEdge();
+		knock(me, 8, 0, 0);
+		run(s, link, 200);
+		expect(me.mode).toBe('fall');
+	});
+});

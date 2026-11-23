@@ -26,6 +26,7 @@ import {
 	RESPAWN_MS,
 	SLICK_DRAG,
 	SLIDE_SPEED,
+	TEETER_MS,
 	TURN_GRIP,
 	WALK_ACCEL,
 	WALK_SPEED,
@@ -183,6 +184,38 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 		p.vy = rvy + here.vy;
 	}
 
+	// Teeter: walking off the edge (rather than being shoved off) catches
+	// you at the brink for a moment. Let go or turn away and you're fine;
+	// keep pushing toward the water and in you go.
+	const walking =
+		p.knockMs <= 0 &&
+		p.slideMs <= 0 &&
+		!here.slick &&
+		Math.hypot(p.vx - here.vx, p.vy - here.vy) < WALK_SPEED * 1.1;
+	let teetering = false;
+	let leaning = false;
+	if (walking && here.ok && p.teeterMs < TEETER_MS) {
+		const lead = PENGUIN_R * 0.35;
+		const nx = p.x + p.vx * dt;
+		const ny = p.y + p.vy * dt;
+		if (p.vx !== 0 && !supportAt(arena, nx + Math.sign(p.vx) * lead, p.y, t).ok) {
+			// Still steering that way? That's leaning over the edge.
+			if (mx * Math.sign(p.vx) > 0.2) leaning = true;
+			p.vx = here.vx;
+			teetering = true;
+		}
+		if (p.vy !== 0 && !supportAt(arena, p.x, ny + Math.sign(p.vy) * lead, t).ok) {
+			if (my * Math.sign(p.vy) > 0.2) leaning = true;
+			p.vy = here.vy;
+			teetering = true;
+		}
+	}
+	// The wobble builds while you lean over the water, and fades when you don't.
+	// Leaned too long: you're going in (unless you let go right now).
+	const committed = p.teeterMs >= TEETER_MS && (mx !== 0 || my !== 0);
+	if (leaning) p.teeterMs += ms;
+	else if (!teetering && !committed) p.teeterMs = Math.max(0, p.teeterMs - ms * 2);
+
 	p.x += p.vx * dt;
 	p.y += p.vy * dt;
 
@@ -223,6 +256,7 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 		p.modeMs = 0;
 		p.slideMs = 0;
 		p.stunMs = 0;
+		p.teeterMs = 0;
 		res.fell = true;
 	}
 	void others;

@@ -84,7 +84,7 @@ export const MAP_CHOICES = ['mix', ...MAPS.map((m) => m.id)];
  * @property {number} speed
  * @property {number} lives
  * @property {PenguinMode} mode
- * @property {number} flags bit0 stun, 1 invuln, 2 shove, 3 slide, 4 mega, 5 knock
+ * @property {number} flags bit0 stun, 1 invuln, 2 shove, 3 slide, 4 mega, 5 knock, 6 teeter
  * @property {PowerKind} power
  * @property {number} uses
  * @property {Look} look
@@ -926,7 +926,8 @@ export function toSnap(p) {
 		(p.shoveMs > 0 ? 4 : 0) |
 		(p.slideMs > 0 ? 8 : 0) |
 		(p.megaMs > 0 ? 16 : 0) |
-		(p.knockMs > 0 ? 32 : 0);
+		(p.knockMs > 0 ? 32 : 0) |
+		(p.teeterMs > 0 ? 64 : 0);
 	return {
 		pid: p.id,
 		x: p.x,
@@ -989,6 +990,7 @@ export function applySnap(p, s) {
 	p.slideMs = s.flags & 8 ? Math.max(p.slideMs, 200) : 0;
 	p.megaMs = s.flags & 16 ? Math.max(p.megaMs, 200) : 0;
 	p.knockMs = s.flags & 32 ? Math.max(p.knockMs, 200) : 0;
+	p.teeterMs = s.flags & 64 ? Math.max(p.teeterMs, 100) : 0;
 	p.power = s.power;
 	p.uses = s.uses;
 	p.look = s.look;

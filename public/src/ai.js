@@ -41,6 +41,8 @@ import { angleDiff, floeUnder } from './physics.js';
  * @property {number} checkMs Until the next progress check.
  * @property {number} unstickMs Wandering to get unstuck.
  * @property {number} wanderA Which way to wander.
+ * @property {boolean} sloppy Not watching its feet right now (can blunder in).
+ * @property {number} daydreamMs Waddling off somewhere without looking.
  */
 
 /** @type {WeakMap<Penguin, Brain>} */
@@ -66,6 +68,8 @@ function brainOf(p) {
 			checkMs: 1500,
 			unstickMs: 0,
 			wanderA: Math.random() * Math.PI * 2,
+			sloppy: false,
+			daydreamMs: 0,
 		};
 		brains.set(p, b);
 	}
@@ -88,6 +92,7 @@ export function botInput(state, p, t) {
 	brain.thinkMs -= dt;
 	brain.calmMs = Math.max(0, brain.calmMs - dt);
 	brain.unstickMs = Math.max(0, brain.unstickMs - dt);
+	brain.daydreamMs = Math.max(0, brain.daydreamMs - dt);
 	// Progress check: barely moved in 1.5 s? Re-plan and wander a bit.
 	brain.checkMs -= dt;
 	if (brain.checkMs <= 0) {
@@ -108,6 +113,13 @@ export function botInput(state, p, t) {
 
 	if (brain.thinkMs <= 0) {
 		brain.thinkMs = 500 + Math.random() * 900;
+		// Now and then (more often for clumsier bots) it stops watching its
+		// feet for a moment — that's how computer penguins fall in by mistake.
+		brain.sloppy = Math.random() < 0.5 * (1 - brain.skill);
+		if (brain.sloppy && Math.random() < 0.5) {
+			brain.daydreamMs = 900 + Math.random() * 900;
+			brain.wanderA = Math.random() * Math.PI * 2;
+		}
 		let best = -1;
 		let bestScore = Infinity;
 		for (const q of others) {
@@ -150,11 +162,11 @@ export function botInput(state, p, t) {
 	if (floe && (floeDanger || Math.random() < 0.02)) {
 		gx = -p.x;
 		gy = -p.y;
-	} else if (edge > 0.9 && (safe = safestNear(state, p, t)).gain > 0.12) {
+	} else if (!brain.sloppy && edge > 0.9 && (safe = safestNear(state, p, t)).gain > 0.12) {
 		// Right at the brink: step back to a clearly safer spot close by.
 		gx = safe.x - p.x;
 		gy = safe.y - p.y;
-	} else if (brain.unstickMs > 0) {
+	} else if (brain.unstickMs > 0 || brain.daydreamMs > 0) {
 		// Unsticking: wander somewhere walkable in a fresh direction.
 		gx = Math.cos(brain.wanderA) * 3;
 		gy = Math.sin(brain.wanderA) * 3;
@@ -296,7 +308,7 @@ export function botInput(state, p, t) {
 
 	// Find a way around walls and holes rather than straight into them.
 	const nav = navFor(arena, t);
-	if (Math.hypot(gx, gy) > 0.05 && fi < 0) {
+	if (Math.hypot(gx, gy) > 0.05 && fi < 0 && !brain.sloppy) {
 		const wp = route(nav, p.x, p.y, p.x + gx, p.y + gy);
 		if (!wp) {
 			// Boxed in (rare): pick a new direction next time round.
@@ -314,7 +326,7 @@ export function botInput(state, p, t) {
 		}
 		// Last-moment feelers: never step into a hole or off the edge.
 		const look = 0.6 + p.speed * 0.2;
-		if (!safeAhead(nav, p.x, p.y, gx, gy, look)) {
+		if (!brain.sloppy && !safeAhead(nav, p.x, p.y, gx, gy, look)) {
 			const base = Math.atan2(gy, gx);
 			const mag = Math.hypot(gx, gy);
 			for (const da of [0.5, -0.5, 1, -1, 1.6, -1.6, 2.4, -2.4]) {
@@ -329,7 +341,11 @@ export function botInput(state, p, t) {
 		}
 		// Sliding toward the water? Brake against the slide.
 		const drift = Math.hypot(p.vx, p.vy);
-		if (drift > 1 && !safeAhead(nav, p.x, p.y, p.vx, p.vy, drift * 0.35 + 0.3)) {
+		if (
+			!brain.sloppy &&
+			drift > 1 &&
+			!safeAhead(nav, p.x, p.y, p.vx, p.vy, drift * 0.35 + 0.3)
+		) {
 			gx = -p.vx / drift + gx * 0.2;
 			gy = -p.vy / drift + gy * 0.2;
 		}

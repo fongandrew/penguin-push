@@ -57,6 +57,12 @@ export const SNOWBALL_RANGE = 10;
 export const SNOWBALL_R = 0.22;
 export const STUN_MS = 1600;
 
+/**
+ * Walking (not shoved) to the edge, a penguin teeters instead of falling
+ * straight in. Keep pushing toward the water this long and in you go.
+ */
+export const TEETER_MS = 450;
+
 /** Falling in, coming back. */
 export const FALL_MS = 1200;
 export const RESPAWN_MS = 1000;
