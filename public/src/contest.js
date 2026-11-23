@@ -8,7 +8,7 @@
  * Solo play runs the same reducer directly.
  */
 
-import { jarAt, kickAllowed, onIsland, rollPath } from './arena.js';
+import { jarAt, kickAllowed, onIsland, rollPath, tileSunk } from './arena.js';
 import { BALL_GONE_MS, BALL_RESPAWN_MS } from './constants.js';
 
 /** @typedef {import('./arena.js').Arena} Arena */
@@ -64,6 +64,9 @@ export function cloneContest(c) {
  */
 export function ballAt(arena, c, ball, t) {
 	const kicks = c.kicks[ball] ?? [];
+	const home = arena.balls[ball];
+	// Its step sank in sudden death: it went with it.
+	if (!home || tileSunk(arena, home.k, t)) return { kind: 'away' };
 	let last = null;
 	for (const k of kicks) if (k.t <= t) last = k;
 	if (!last) return { kind: 'rest' };

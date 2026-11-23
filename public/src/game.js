@@ -13,14 +13,13 @@
 
 import { botInput } from './ai.js';
 import {
-	capDist,
+	inBlock,
 	jarAt,
 	jarIndicesAround,
 	kickAllowed,
 	makeArena,
 	shelteredFrom,
 	startSpots,
-	wallsAt,
 	waveAt,
 } from './arena.js';
 import {
@@ -558,8 +557,7 @@ function stepThrows(state, link, t) {
 		}
 		if (
 			arena?.obstacles.some((o) => Math.hypot(pos.x - o.x, pos.y - o.y) < o.r) ||
-			(pos.z < 1.1 &&
-				(arena ? wallsAt(arena, t) : []).some((w) => capDist(w, pos.x, pos.y).d < 0.1))
+			(pos.z < 1.1 && !!arena && pos.z < 1.05 && inBlock(arena, t, pos.x, pos.y, 0))
 		) {
 			th.dead = true;
 			state.fx.push({ kind: 'poof', x: pos.x, y: pos.y, z: pos.z });

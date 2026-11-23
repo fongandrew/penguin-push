@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { downhillAt, rollPath } from '../public/src/arena.js';
+import { downhillDirs, rollPath, tileCenter } from '../public/src/arena.js';
 import { FALL_MS, RESPAWN_MS, START_LIVES, STEP } from '../public/src/constants.js';
 import { addThrow, onOut, tick } from '../public/src/game.js';
 import { SoloLink } from '../public/src/solo.js';
@@ -90,8 +90,8 @@ describe('match rules', () => {
 		const arena = s.arena;
 		const me = s.penguins[0];
 		const home = arena?.balls[0];
-		if (!arena || !me || !home || !arena.hill) throw new Error('setup');
-		const down = downhillAt(arena, home.x, home.y);
+		if (!arena || !me || !home) throw new Error('setup');
+		const down = downhillDirs(arena, 0)[0];
 		if (!down) throw new Error('slope');
 		const angle = Math.atan2(down.y, down.x);
 		link.claim({ type: 'kick', ball: 0, angle, by: 1, t: 0 });
@@ -112,7 +112,7 @@ describe('match rules', () => {
 	});
 
 	it('plays out a whole computer-only match on every map', () => {
-		for (const map of ['hill', 'floes', 'cove', 'maze']) {
+		for (const map of ['hill', 'floes', 'cove', 'grid']) {
 			const s = soloMatch(map, 77);
 			const link = new SoloLink(s);
 			let guard = 0;
@@ -124,29 +124,30 @@ describe('match rules', () => {
 	});
 });
 
-describe('walls and holes', () => {
-	it('stops you walking through a snow wall', () => {
-		const s = soloMatch('maze', 5, 0);
+describe('blocks and water squares', () => {
+	it('stops you walking through an ice block', () => {
+		const s = soloMatch('grid', 5, 0);
 		const link = onlyMe(s);
 		const me = s.penguins[0];
-		const w = s.arena?.walls.find((x) => x.ax === x.bx);
-		if (!me || !w) throw new Error('setup');
-		// Stand left of a vertical wall and walk right into it.
-		me.x = w.ax - 0.9;
-		me.y = (w.ay + w.by) / 2;
+		const b = s.arena?.blocks[0];
+		if (!me || !b) throw new Error('setup');
+		me.x = b.x - 1.0;
+		me.y = b.y;
 		me.invulnMs = 1e9;
-		run(s, link, 1500, { ...IDLE, mx: 1 });
-		expect(me.x).toBeLessThan(w.ax);
+		run(s, link, 1200, { ...IDLE, mx: 1 });
+		expect(me.x).toBeLessThan(b.x - 0.5);
 	});
 
-	it('drops you in a hole', () => {
-		const s = soloMatch('maze', 5, 0);
+	it('drops you in a water square', () => {
+		const s = soloMatch('grid', 5, 0);
 		const link = onlyMe(s);
 		const me = s.penguins[0];
-		const h = s.arena?.holes[0];
-		if (!me || !h) throw new Error('setup');
-		me.x = h.ax;
-		me.y = h.ay;
+		const arena = s.arena;
+		if (!me || !arena) throw new Error('setup');
+		const k = arena.level.findIndex((l, k) => l < 0 && k > arena.n * 3);
+		const c = tileCenter(arena, k);
+		me.x = c.x;
+		me.y = c.y;
 		run(s, link, 50);
 		expect(me.mode).toBe('fall');
 	});

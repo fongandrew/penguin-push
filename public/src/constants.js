@@ -22,8 +22,6 @@ export const ICE_DRAG = 2.4;
 export const SLICK_DRAG = 0.5;
 /** How long a knock leaves you mostly out of control, ms. */
 export const KNOCK_MS = 420;
-/** Hill pull on penguins (they slide down slopes a little). */
-export const PENGUIN_GRAVITY = 3.2;
 
 /** Flipper shove. */
 export const SHOVE_RANGE = 1.35;
@@ -59,9 +57,7 @@ export const INVULN_MS = 1600;
 
 /** Giant snowballs on Snowball Hill. */
 export const BALL_R = 0.95;
-export const BALL_KICK_SPEED = 4.2;
-export const BALL_GRAVITY = 10;
-export const BALL_DRAG = 0.18;
+export const BALL_KICK_SPEED = 3.6;
 export const BALL_HIT = 15;
 export const BALL_GONE_MS = 900;
 export const BALL_RESPAWN_MS = 5000;
@@ -74,8 +70,8 @@ export const JAR_LIFE_MS = 15000;
 export const JAR_R = 0.55;
 
 /** Sudden death: the ice starts cracking off. */
-export const SHRINK_START_MS = 90000;
-export const SHRINK_END_MS = 150000;
+export const SHRINK_START_MS = 75000;
+export const SHRINK_END_MS = 130000;
 export const SHRINK_MIN = 0.16;
 /** Snow walls crumble a little after sudden death starts (no hiding forever). */
 export const WALLS_CRUMBLE_MS = SHRINK_START_MS + 8000;

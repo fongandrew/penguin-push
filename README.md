@@ -4,13 +4,11 @@ Waddle. Shove. **Splash!** A cute 3D penguin party game for phones: push the
 other penguins into the sea. Last penguin standing wins. Up to 4 players,
 online or against computer penguins, and the wins add up across a session.
 
-| Changing station | Snowball Hill | Ice Maze | Leaderboard |
+| Changing station | Snowball Hill | Ice Grid | Leaderboard |
 | --- | --- | --- | --- |
-| ![](docs/screenshots/station.png) | ![](docs/screenshots/snowball-hill.png) | ![](docs/screenshots/ice-maze.png) | ![](docs/screenshots/leaderboard.png) |
+| ![](docs/screenshots/station.png) | ![](docs/screenshots/snowball-hill.png) | ![](docs/screenshots/ice-grid.png) | ![](docs/screenshots/leaderboard.png) |
 
-![Ice Maze: snow-wall corridors with holes in the ice](docs/screenshots/ice-maze-landscape.png)
-
-![Igloo Cove: a wave is coming, so the computer penguins hide behind the igloo](docs/screenshots/igloo-cove-wave.png)
+![Ice Grid: an inside-out Bomberman board of ice tiles, water squares and ice blocks](docs/screenshots/ice-grid-landscape.png)
 
 ## How to play
 
@@ -21,20 +19,19 @@ online or against computer penguins, and the wins add up across a session.
   - ❄️ **Snowballs** (×3): auto-aimed, and a hit makes a penguin dizzy for a moment.
   - 🛷 **Belly slide** (×3): a fast dash that knocks anyone in the way flying.
   - 💪 **Mega flippers**: bigger, stronger shoves for 9 seconds.
-- After 90 seconds the ice starts cracking from the edges (sudden death).
 - The results screen shows a leaderboard. Wins add up for as long as the room (or the solo session) lasts.
 
 ### Maps
 
-Every map has **holes in the ice** to shove people into, and most have **snow walls**. You can't walk through walls, and they stop low snowballs (a long throw arcs over). Walls also block waves, and they bounce giant snowballs.
+Every map is a **grid of ice blocks** stuck together, like a Bomberman board turned inside out: the board is ice and the "pillars" are **water squares** you can be shoved into. **Ice blocks** sit on some tiles. You can't walk through them, they stop low snowballs (a long throw arcs over), they block waves, and they stop giant snowballs.
 
-- ⛄ **Snowball Hill**: two giant snowballs sit on a ridge, each at the top of a lane between snow walls. Snowballs **only roll downhill**: you have to get behind one (uphill) and push. Pushing from below does nothing. Arrows on the snow show which way each one will go. It rolls down its lane, bowls over anyone in it, and drops into the holes and crack at the bottom. Then it respawns at the top.
-- 🧊 **Floe Frenzy**: a small iceberg with fishing holes and a crack, ringed by drifting floes that carry you around. The floes crack and sink now and then.
-- 🌊 **Igloo Cove**: red arrows warn of a big wave. It shoves everyone across the ice unless you hide behind the igloo, a rock or a snow wall. It also has holes and shiny slippery patches.
-- 🧩 **Ice Maze**: a maze of snow walls, different every match. Extra gaps make loops, so you're never cornered for good. The dead ends have holes in them.
+- ⛄ **Snowball Hill**: a stepped pyramid of stacked ice. A giant snowball sits on each front corner of the top, above a checkerboard of water squares. Snowballs **only roll downhill**: you have to push from the uphill side, and arrows on the steps show the ways each one can go. A snowball rolls straight along its row or column, speeds up at every step down, bowls over anyone in the way, and drops into the first water it meets. Then a new one appears at the top.
+- 🧊 **Floe Frenzy**: four little islands split by a cross of water, joined by one-tile bridges, with 2×2 rafts drifting around the outside. The rafts crack and sink now and then.
+- 🌊 **Igloo Cove**: red arrows warn of a big wave. It shoves everyone across the ice unless you hide behind the igloo or an ice block. There are holes, and slippery polished tiles.
+- 🔲 **Ice Grid**: the full inside-out Bomberman board, with water at every other tile and ice blocks scattered on the rest. It's different every match.
 - 🔀 **Mix it up**: a different map each round.
 
-In sudden death the snow walls crumble, so nobody can hide behind one forever. Heart jars also stop appearing.
+**Sudden death** starts after 75 seconds. Tiles shake, then sink one by one from the outside in, until only a small connected patch in the middle is left. The ice blocks crumble too, and heart jars stop appearing.
 
 ### Changing station
 
@@ -86,7 +83,8 @@ How the game maps onto netplay's three state categories (`public/src/multi.js`):
 
 | File | What |
 | --- | --- |
-| `arena.js` | maps (holes and walls as capsules, seeded maze), seed-derived hazards and jars, the downhill-only snowball rule and roll sim |
+| `arena.js` | the tile board (levels, water, ice blocks, sudden-death crack order), seed-derived hazards and jars, the downhill-only grid snowball roll |
+| `board3d.js` | the board in 3D: instanced ice tiles, blocks, rafts, surf, sinking tiles, snowball arrows |
 | `physics.js` / `game.js` | ice movement, shoves, bumps, powers, falls, match end, tally |
 | `ai.js` / `nav.js` | computer penguins / grid route-finding around walls and holes |
 | `contest.js` | contested-claim reducer |

@@ -3,13 +3,12 @@
  * the fall-in / drop-back-in cycle. Pure apart from mutating the penguin.
  */
 
-import { capDist, floeAt, gradientAt, heightAt, respawnSpot, supportAt, wallsAt } from './arena.js';
+import { floeAt, heightAt, pushOutOfBlocks, respawnSpot, supportAt } from './arena.js';
 import {
 	FALL_MS,
 	ICE_DRAG,
 	INVULN_MS,
 	KNOCK_MS,
-	PENGUIN_GRAVITY,
 	PENGUIN_R,
 	RESPAWN_HEIGHT,
 	RESPAWN_MS,
@@ -132,11 +131,6 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 		p.vy = rvy + here.vy;
 	}
 
-	// The hill pulls you downhill a little.
-	const g = gradientAt(arena, p.x, p.y);
-	p.vx -= g.x * PENGUIN_GRAVITY * dt;
-	p.vy -= g.y * PENGUIN_GRAVITY * dt;
-
 	p.x += p.vx * dt;
 	p.y += p.vy * dt;
 
@@ -158,16 +152,13 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 		}
 	}
 
-	for (const w of wallsAt(arena, t)) {
-		const c = capDist(w, p.x, p.y);
-		if (c.d >= PENGUIN_R) continue;
-		p.x += c.nx * (PENGUIN_R - c.d);
-		p.y += c.ny * (PENGUIN_R - c.d);
-		const vn = p.vx * c.nx + p.vy * c.ny;
+	const hitBlock = pushOutOfBlocks(arena, t, p, PENGUIN_R);
+	if (hitBlock.nx || hitBlock.ny) {
+		// Thud into the ice block: a little bounce, mostly stop.
+		const vn = p.vx * hitBlock.nx + p.vy * hitBlock.ny;
 		if (vn < 0) {
-			// Thud into the snow: a little bounce, mostly stop.
-			p.vx -= 1.3 * vn * c.nx;
-			p.vy -= 1.3 * vn * c.ny;
+			p.vx -= 1.3 * vn * hitBlock.nx;
+			p.vy -= 1.3 * vn * hitBlock.ny;
 		}
 		if (p.slideMs > 0) p.slideMs = 0;
 	}
@@ -253,7 +244,7 @@ export function floeUnder(arena, x, y, t) {
 		const f = arena.floes[i];
 		if (!f) continue;
 		const st = floeAt(f, t);
-		if ((x - st.x) ** 2 + (y - st.y) ** 2 < f.r * f.r) return i;
+		if (Math.abs(x - st.x) < f.half && Math.abs(y - st.y) < f.half) return i;
 	}
 	return -1;
 }

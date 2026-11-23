@@ -20,6 +20,8 @@ architecture.
   (`npm run net:sync`, needs `../pomelo-penguin` or `NETPLAY_REPO`). Don't hand-edit them.
   Engine changes belong in pomelo-penguin.
 - The relay must never parse game payloads. Everything game-specific is in `multi.js`.
+- Maps are a tile grid (`arena.level`/`block`/`crack`; `CELL` = 1.25). Don't reintroduce free-form
+  geometry. Snowballs roll along grid axes and only downhill.
 - Determinism: anything every screen must agree on (map, jars, floes, waves, snowball rolls)
   is derived from the match seed plus match time in `arena.js`. Use the netplay RNG there,
   never `Math.random`.

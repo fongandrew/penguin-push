@@ -5,18 +5,8 @@
  */
 
 import * as THREE from '../vendor/three.module.min.js';
-import {
-	capDist,
-	downhillAt,
-	edgeRadius,
-	floeAt,
-	heightAt,
-	jarAt,
-	jarIndicesAround,
-	shrinkAt,
-	wallsAt,
-	waveAt,
-} from './arena.js';
+import { CELL, heightAt, jarAt, jarIndicesAround, shrinkAt, tileCenter, waveAt } from './arena.js';
+import { Board } from './board3d.js';
 import { BALL_R, PLAYER_COLORS, SNOWBALL_R, WALLS_CRUMBLE_MS } from './constants.js';
 import { ballAt, jarAvailable } from './contest.js';
 import { throwPos } from './game.js';
@@ -107,21 +97,13 @@ export class Renderer {
 		this.scene.add(this.world);
 		/** @type {Arena | null} */
 		this.arena = null;
-		this.islandShrink = -1;
-		/** @type {THREE.Mesh | null} */
-		this.island = null;
-		/** @type {THREE.Mesh | null} */
-		this.foam = null;
-		/** @type {THREE.Group[]} */
-		this.floes = [];
 		/** @type {THREE.Mesh[]} */
 		this.balls = [];
 		/** @type {string[]} */
 		this.ballKinds = [];
-		/** @type {THREE.Group[]} */
-		this.chevrons = [];
-		/** @type {THREE.Group[]} */
-		this.wallMeshes = [];
+		/** @type {Board | null} */
+		this.board = null;
+		this.prevT = 0;
 		/** @type {THREE.Group | null} */
 		this.wave = null;
 		/** @type {THREE.Group | null} */
@@ -180,59 +162,21 @@ export class Renderer {
 		this.penguins.clear();
 		this.jars.clear();
 		this.throws.clear();
-		this.floes = [];
 		this.balls = [];
 		this.ballKinds = [];
-		this.chevrons = [];
-		this.wallMeshes = [];
 		this.wave = null;
 		this.arrows = null;
-		this.islandShrink = -1;
-		this.island = null;
-		this.foam = null;
+		this.prevT = 0;
 
-		for (const f of arena.floes) {
-			const g = makeFloe(f.r, f.shape);
-			this.floes.push(g);
-			this.world.add(g);
-		}
-		for (const o of arena.obstacles) {
-			if (o === arena.igloo) this.world.add(makeIgloo(o.x, o.y, o.r));
-			else this.world.add(makeRock(o.x, o.y, o.r));
-		}
-		for (const c of arena.slick) this.world.add(makeSlickShine(c, arena));
-		for (const w of arena.walls) {
-			const m = makeWall(w, arena);
-			this.wallMeshes.push(m);
-			this.world.add(m);
-		}
-		for (const home of arena.balls) {
-			const down = downhillAt(arena, home.x, home.y);
-			const ch = makeChevrons();
-			ch.position.set(home.x, 0, home.y);
-			if (down) ch.rotation.y = Math.atan2(-down.x, -down.y);
-			// Lay each arrow on the slope.
-			for (const m of ch.children) {
-				const wp = m.position.clone().applyEuler(ch.rotation);
-				m.position.y = heightAt(arena, home.x + wp.x, home.y + wp.z) + 0.04;
-			}
-			this.chevrons.push(ch);
-			this.world.add(ch);
-		}
+		this.board = new Board(arena);
+		this.world.add(this.board.group);
+		if (arena.igloo) this.world.add(makeIgloo(arena.igloo.x, arena.igloo.y, arena.igloo.r));
 		arena.balls.forEach(() => {
 			const m = makeGiantSnowball();
 			this.balls.push(m);
 			this.ballKinds.push('rest');
 			this.world.add(m);
 		});
-		if (arena.hill)
-			this.world.add(
-				makeFlag(
-					arena.hill.x,
-					arena.hill.y + 0.2,
-					heightAt(arena, arena.hill.x, arena.hill.y + 0.2),
-				),
-			);
 		if (arena.waves) {
 			this.wave = makeWave();
 			this.wave.visible = false;
@@ -256,20 +200,11 @@ export class Renderer {
 		if (!arena) return;
 		this.setArena(arena);
 		const t = Math.max(0, state.t);
-		this.updateIsland(arena, t);
 		animateWater(this.water, time);
 		animateSnow(this.snow, dt);
-		this.updateFloes(arena, t, time);
 		this.updateBalls(state, arena, t, dt);
-		this.updateWalls(arena, t);
-		this.chevrons.forEach((ch, i) => {
-			ch.visible = this.ballKinds[i] === 'rest';
-			ch.children.forEach((m, j) => {
-				const mat = /** @type {THREE.Mesh} */ (m).material;
-				if (mat instanceof THREE.MeshBasicMaterial)
-					mat.opacity = 0.45 + 0.45 * Math.max(0, Math.sin(time * 4 - j * 0.9));
-			});
-		});
+		this.board?.update(t, time, this.ballKinds);
+		this.boardFx(arena, t);
 		this.updateWave(arena, t, time);
 		this.updateJars(state, arena, t, time);
 		this.updateThrows(state, t);
@@ -325,95 +260,56 @@ export class Renderer {
 	stationDrag = 0;
 
 	/**
-	 * @param {Arena} arena
-	 * @param {number} t
-	 */
-	updateIsland(arena, t) {
-		const k = shrinkAt(t);
-		if (this.island && Math.abs(k - this.islandShrink) < 0.004) return;
-		const crumbling = this.islandShrink > 0 && k < this.islandShrink;
-		this.islandShrink = k;
-		if (this.island) {
-			this.world.remove(this.island);
-			this.island.geometry.dispose();
-		}
-		if (this.foam) {
-			this.world.remove(this.foam);
-			this.foam.geometry.dispose();
-		}
-		this.island = makeIsland(arena, k);
-		this.world.add(this.island);
-		this.foam = makeFoam(arena, k);
-		this.world.add(this.foam);
-		if (crumbling) {
-			// Chunks breaking off the edge.
-			for (let i = 0; i < 6; i++) {
-				const a = Math.random() * Math.PI * 2;
-				const r = edgeRadius(arena, a) * k;
-				this.spawnParticle(
-					v3(Math.cos(a) * r, Math.sin(a) * r, 0.1),
-					new THREE.Vector3(Math.cos(a) * 1.5, 1.5, Math.sin(a) * 1.5),
-					0xe8f6ff,
-					0.18,
-					1.1,
-					6,
-				);
-			}
-		}
-	}
-
-	/**
-	 * Snow walls sink into the ice when sudden death gets going.
+	 * Splashes as tiles sink, snow puffs as ice blocks crumble.
 	 *
 	 * @param {Arena} arena
 	 * @param {number} t
 	 */
-	updateWalls(arena, t) {
-		const gone = wallsAt(arena, t).length === 0;
-		const k = Math.max(0, Math.min(1, (t - (WALLS_CRUMBLE_MS - 700)) / 700));
-		this.wallMeshes.forEach((m, i) => {
-			if (!gone && k <= 0) {
-				m.visible = true;
-				m.scale.y = 1;
-				return;
+	boardFx(arena, t) {
+		const prev = this.prevT;
+		this.prevT = t;
+		if (t <= prev || t - prev > 500) return;
+		for (let k = 0; k < arena.crack.length; k++) {
+			const c = arena.crack[k] ?? Infinity;
+			if (c <= prev || c > t) continue;
+			const p = tileCenter(arena, k);
+			for (let i = 0; i < 5; i++) {
+				this.spawnParticle(
+					new THREE.Vector3(
+						p.x + (Math.random() - 0.5) * CELL,
+						0.1,
+						p.y + (Math.random() - 0.5) * CELL,
+					),
+					new THREE.Vector3(
+						(Math.random() - 0.5) * 2,
+						2 + Math.random() * 2,
+						(Math.random() - 0.5) * 2,
+					),
+					i % 2 ? 0xffffff : 0x5cc6ff,
+					0.1,
+					0.7,
+					10,
+				);
 			}
-			if (m.visible && Math.random() < 0.3) {
-				const w = arena.walls[i];
-				if (w) {
-					const u = Math.random();
-					const x = w.ax + (w.bx - w.ax) * u;
-					const y = w.ay + (w.by - w.ay) * u;
-					this.spawnParticle(
-						new THREE.Vector3(x, 0.6, y),
-						new THREE.Vector3((Math.random() - 0.5) * 2, 2, (Math.random() - 0.5) * 2),
-						0xffffff,
-						0.12,
-						0.6,
-						6,
-					);
-				}
+			this.spawnRipple(new THREE.Vector3(p.x, 0.02, p.y), 1.6);
+		}
+		if (prev < WALLS_CRUMBLE_MS && t >= WALLS_CRUMBLE_MS - 600) {
+			for (const b of arena.blocks) {
+				if (Math.random() > 0.35) continue;
+				this.spawnParticle(
+					new THREE.Vector3(b.x, 0.7, b.y),
+					new THREE.Vector3(
+						(Math.random() - 0.5) * 2.5,
+						2.5,
+						(Math.random() - 0.5) * 2.5,
+					),
+					0xe8f6ff,
+					0.16,
+					0.8,
+					8,
+				);
 			}
-			m.scale.y = Math.max(0.01, 1 - k);
-			m.visible = k < 1;
-		});
-	}
-
-	/**
-	 * @param {Arena} arena
-	 * @param {number} t
-	 * @param {number} time
-	 */
-	updateFloes(arena, t, time) {
-		arena.floes.forEach((f, i) => {
-			const g = this.floes[i];
-			if (!g) return;
-			const st = floeAt(f, t);
-			const shake = st.warn ? Math.sin(time * 40) * 0.05 : 0;
-			g.position.set(st.x + shake, -st.sink * 1.1, st.y);
-			g.rotation.set(st.warn ? Math.sin(time * 23) * 0.03 : 0, -st.angle, st.sink * 0.15);
-			const crack = g.userData['crack'];
-			if (crack instanceof THREE.Object3D) crack.visible = st.warn || st.sink > 0;
-		});
+		}
 	}
 
 	/**
@@ -448,7 +344,13 @@ export class Renderer {
 				const sp = Math.hypot(b.vx, b.vy);
 				m.visible = true;
 				m.scale.setScalar(1);
-				m.position.copy(v3(b.x, b.y, heightAt(arena, b.x, b.y) + BALL_R - 0.1));
+				// Bump down the steps smoothly rather than teleporting.
+				const wantY = heightAt(arena, b.x, b.y) + BALL_R - 0.1;
+				const y =
+					m.position.y > wantY
+						? m.position.y + (wantY - m.position.y) * Math.min(1, dt * 9)
+						: wantY;
+				m.position.set(b.x, y, b.y);
 				if (sp > 0.01) {
 					const axis = new THREE.Vector3(b.vy / sp, 0, -b.vx / sp);
 					m.rotateOnWorldAxis(axis, -(sp * dt) / BALL_R);
@@ -616,7 +518,14 @@ export class Renderer {
 			const celebrate = !!done && state.result?.winner === p.id;
 			animatePenguin(rig, p, time, dt, { celebrate, sad: !!done && !celebrate });
 			if (out && p.z > -2.5) p.z -= dt * 0.6;
-			rig.root.position.set(p.x, p.z, p.y);
+			// Hop smoothly up and down the stacked steps.
+			const z0 = Number(rig.root.userData['z'] ?? p.z);
+			const z =
+				p.mode === 'play' && Math.abs(p.z - z0) < 1
+					? z0 + (p.z - z0) * Math.min(1, dt * 14)
+					: p.z;
+			rig.root.userData['z'] = z;
+			rig.root.position.set(p.x, z, p.y);
 			const face = celebrate
 				? Math.atan2(this.camera.position.z - p.y, this.camera.position.x - p.x)
 				: p.face;
@@ -927,352 +836,6 @@ function easeBack(k) {
 	return 1 + (c + 1) * x * x * x + c * x * x;
 }
 
-/**
- * The iceberg's top and cliffs, following the (shrinking) edge.
- *
- * @param {Arena} arena
- * @param {number} k Shrink factor.
- */
-function makeIsland(arena, k) {
-	const rings = 44;
-	const segs = 160;
-	/** @type {number[]} */
-	const pos = [];
-	/** @type {number[]} */
-	const col = [];
-	/** @type {number[]} */
-	const idx = [];
-	const snow = new THREE.Color(0xf7fcff);
-	const blue = new THREE.Color(0xcfe9fb);
-	const slick = new THREE.Color(0xe2f6ff);
-	const cliff = new THREE.Color(0x8fd3f5);
-	const deep = new THREE.Color(0x4aa8d8);
-	const tmp = new THREE.Color();
-	const vert = (
-		/** @type {number} */ x,
-		/** @type {number} */ y,
-		/** @type {number} */ z,
-		/** @type {THREE.Color} */ c,
-	) => {
-		pos.push(x, y, z);
-		col.push(c.r, c.g, c.b);
-		return pos.length / 3 - 1;
-	};
-	// Centre + rings.
-	vert(0, heightAt(arena, 0, 0), 0, snow);
-	for (let i = 1; i <= rings; i++) {
-		for (let j = 0; j < segs; j++) {
-			const a = (j / segs) * Math.PI * 2;
-			const r = (i / rings) * edgeRadius(arena, a) * k;
-			let x = Math.cos(a) * r;
-			let y = Math.sin(a) * r;
-			// Snap grid points near a hole onto its outline so holes look round.
-			for (const h of arena.holes) {
-				const c = capDist(h, x, y);
-				if (Math.abs(c.d) < 0.2) {
-					x = c.px + c.nx * h.r;
-					y = c.py + c.ny * h.r;
-				}
-			}
-			const bump = Math.sin(x * 2.1 + y * 0.7) * Math.cos(y * 1.7 - x * 0.4) * 0.03;
-			tmp.copy(snow).lerp(blue, Math.pow(i / rings, 3));
-			if (arena.holes.some((h) => capDist(h, x, y).d < 0.35)) tmp.copy(blue);
-			if (arena.slick.some((c) => (x - c.x) ** 2 + (y - c.y) ** 2 < c.r * c.r))
-				tmp.copy(slick);
-			vert(x, heightAt(arena, x, y) + bump + (i === rings ? -0.04 : 0), y, tmp);
-		}
-	}
-	const ringStart = (/** @type {number} */ i) => 1 + (i - 1) * segs;
-	/** Add a top triangle unless it's over a hole. */
-	const tri = (/** @type {number} */ a, /** @type {number} */ b, /** @type {number} */ c) => {
-		const cx = ((pos[a * 3] ?? 0) + (pos[b * 3] ?? 0) + (pos[c * 3] ?? 0)) / 3;
-		const cy = ((pos[a * 3 + 2] ?? 0) + (pos[b * 3 + 2] ?? 0) + (pos[c * 3 + 2] ?? 0)) / 3;
-		if (arena.holes.some((h) => capDist(h, cx, cy).d < -0.01)) return;
-		idx.push(a, b, c);
-	};
-	for (let j = 0; j < segs; j++) {
-		tri(0, ringStart(1) + ((j + 1) % segs), ringStart(1) + j);
-	}
-	for (let i = 1; i < rings; i++) {
-		for (let j = 0; j < segs; j++) {
-			const a = ringStart(i) + j;
-			const b = ringStart(i) + ((j + 1) % segs);
-			const c = ringStart(i + 1) + j;
-			const d = ringStart(i + 1) + ((j + 1) % segs);
-			tri(a, b, c);
-			tri(b, d, c);
-		}
-	}
-	// Holes: icy walls going down into the water.
-	for (const h of arena.holes) {
-		const m = 48;
-		const top = pos.length / 3;
-		for (let s = 0; s < m; s++) {
-			const p = holeOutline(h, (s / m) * Math.PI * 2);
-			vert(p.x, heightAt(arena, p.x, p.y) - 0.02, p.y, cliff);
-		}
-		const bottom = pos.length / 3;
-		for (let s = 0; s < m; s++) {
-			const p = holeOutline(h, (s / m) * Math.PI * 2);
-			vert(p.x, -1.8, p.y, deep);
-		}
-		for (let s = 0; s < m; s++) {
-			const a = top + s;
-			const b = top + ((s + 1) % m);
-			const c = bottom + s;
-			const d = bottom + ((s + 1) % m);
-			idx.push(a, c, b, b, c, d);
-		}
-	}
-	// Cliffs: a lip, then down under the water.
-	const layers = [
-		{ r: 1.0, y: -0.25, c: cliff },
-		{ r: 0.96, y: -0.9, c: cliff },
-		{ r: 0.85, y: -2.6, c: deep },
-	];
-	let prevStart = ringStart(rings);
-	for (const L of layers) {
-		const start = pos.length / 3;
-		for (let j = 0; j < segs; j++) {
-			const a = (j / segs) * Math.PI * 2;
-			const r = edgeRadius(arena, a) * k * L.r + Math.sin(j * 1.7) * 0.04;
-			vert(Math.cos(a) * r, L.y, Math.sin(a) * r, L.c);
-		}
-		for (let j = 0; j < segs; j++) {
-			const a = prevStart + j;
-			const b = prevStart + ((j + 1) % segs);
-			const c = start + j;
-			const d = start + ((j + 1) % segs);
-			idx.push(a, b, c, b, d, c);
-		}
-		prevStart = start;
-	}
-	const geo = new THREE.BufferGeometry();
-	geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-	geo.setAttribute('color', new THREE.Float32BufferAttribute(col, 3));
-	geo.setIndex(idx);
-	geo.computeVertexNormals();
-	const mesh = new THREE.Mesh(
-		geo,
-		new THREE.MeshToonMaterial({
-			vertexColors: true,
-			gradientMap: toonGradient(),
-			side: THREE.DoubleSide,
-		}),
-	);
-	mesh.receiveShadow = true;
-	return mesh;
-}
-
-/**
- * A point on a hole's outline, by direction (support point of the capsule).
- *
- * @param {import('./arena.js').Capsule} h
- * @param {number} a
- */
-function holeOutline(h, a) {
-	const ux = Math.cos(a);
-	const uy = Math.sin(a);
-	const useB = h.bx * ux + h.by * uy > h.ax * ux + h.ay * uy;
-	const cx = useB ? h.bx : h.ax;
-	const cy = useB ? h.by : h.ay;
-	return { x: cx + ux * h.r, y: cy + uy * h.r };
-}
-
-/**
- * A snow wall: packed snow blocks with a rounded white top.
- *
- * @param {import('./arena.js').Capsule} w
- * @param {Arena} arena
- */
-function makeWall(w, arena) {
-	const g = new THREE.Group();
-	const len = Math.hypot(w.bx - w.ax, w.by - w.ay);
-	const h = 0.78;
-	const side = new THREE.MeshToonMaterial({
-		map: blockTexture(len),
-		gradientMap: toonGradient(),
-	});
-	const body = new THREE.Mesh(new THREE.BoxGeometry(len, h, w.r * 2), side);
-	body.position.y = h / 2;
-	body.castShadow = true;
-	body.receiveShadow = true;
-	g.add(body);
-	const capMat = toon(0xffffff);
-	for (const end of [-len / 2, len / 2]) {
-		const post = new THREE.Mesh(
-			new THREE.CylinderGeometry(w.r, w.r * 1.05, h, 14),
-			toon(0xe4f2fc),
-		);
-		post.position.set(end, h / 2, 0);
-		post.castShadow = true;
-		g.add(post);
-		const knob = new THREE.Mesh(new THREE.SphereGeometry(w.r * 1.08, 12, 8), capMat);
-		knob.position.set(end, h, 0);
-		knob.scale.y = 0.6;
-		g.add(knob);
-	}
-	const cap = new THREE.Mesh(new THREE.CylinderGeometry(w.r * 1.08, w.r * 1.08, len, 12), capMat);
-	cap.rotation.z = Math.PI / 2;
-	cap.scale.set(1, 1, 0.6);
-	cap.position.y = h;
-	cap.castShadow = true;
-	g.add(cap);
-	const mx = (w.ax + w.bx) / 2;
-	const my = (w.ay + w.by) / 2;
-	g.position.set(mx, heightAt(arena, mx, my) - 0.02, my);
-	g.rotation.y = -Math.atan2(w.by - w.ay, w.bx - w.ax);
-	return g;
-}
-
-/** @type {Map<number, THREE.CanvasTexture>} */
-const blockTex = new Map();
-
-/** @param {number} len */
-function blockTexture(len) {
-	const reps = Math.max(1, Math.round(len / 0.9));
-	let tex = blockTex.get(reps);
-	if (tex) return tex;
-	const cv = document.createElement('canvas');
-	cv.width = 64 * reps;
-	cv.height = 64;
-	const c = cv.getContext('2d');
-	if (c) {
-		c.fillStyle = '#eaf5fd';
-		c.fillRect(0, 0, cv.width, 64);
-		c.strokeStyle = '#b4d6ec';
-		c.lineWidth = 3;
-		for (const yy of [2, 32, 62]) {
-			c.beginPath();
-			c.moveTo(0, yy);
-			c.lineTo(cv.width, yy);
-			c.stroke();
-		}
-		for (let i = 0; i <= reps * 2; i++) {
-			for (const [y0, off] of [
-				[2, 0],
-				[32, 16],
-			]) {
-				const xx = i * 32 + (off ?? 0);
-				c.beginPath();
-				c.moveTo(xx, y0 ?? 0);
-				c.lineTo(xx, (y0 ?? 0) + 30);
-				c.stroke();
-			}
-		}
-	}
-	tex = new THREE.CanvasTexture(cv);
-	tex.colorSpace = THREE.SRGBColorSpace;
-	blockTex.set(reps, tex);
-	return tex;
-}
-
-/**
- * Glossy streaks over a slippery patch, so it reads as ice, not water.
- *
- * @param {{ x: number, y: number, r: number }} c
- * @param {Arena} arena
- */
-function makeSlickShine(c, arena) {
-	const g = new THREE.Group();
-	const ring = new THREE.Mesh(
-		new THREE.RingGeometry(c.r - 0.08, c.r, 40),
-		new THREE.MeshBasicMaterial({
-			color: 0xffffff,
-			transparent: true,
-			opacity: 0.8,
-			depthWrite: false,
-		}),
-	);
-	ring.rotation.x = -Math.PI / 2;
-	g.add(ring);
-	const streak = new THREE.MeshBasicMaterial({
-		color: 0xffffff,
-		transparent: true,
-		opacity: 0.85,
-		depthWrite: false,
-	});
-	for (const [dx, dz, len] of [
-		[-0.3, -0.2, 0.9],
-		[0.1, 0.15, 0.6],
-		[0.35, -0.35, 0.4],
-	]) {
-		const m = new THREE.Mesh(new THREE.PlaneGeometry(len ?? 0.5, 0.07), streak);
-		m.rotation.set(-Math.PI / 2, 0, 0.7);
-		m.position.set((dx ?? 0) * c.r, 0, (dz ?? 0) * c.r);
-		g.add(m);
-	}
-	g.position.set(c.x, heightAt(arena, c.x, c.y) + 0.03, c.y);
-	return g;
-}
-
-/**
- * Pale arrows painted on the snow below a resting giant snowball: this way down.
- */
-function makeChevrons() {
-	const g = new THREE.Group();
-	const shape = new THREE.Shape();
-	shape.moveTo(-0.45, -0.18);
-	shape.lineTo(0, 0.22);
-	shape.lineTo(0.45, -0.18);
-	shape.lineTo(0.45, -0.38);
-	shape.lineTo(0, 0.02);
-	shape.lineTo(-0.45, -0.38);
-	shape.closePath();
-	const geo = new THREE.ShapeGeometry(shape);
-	const mat = new THREE.MeshBasicMaterial({
-		color: 0x3d9bdf,
-		transparent: true,
-		opacity: 0.7,
-		depthWrite: false,
-	});
-	for (let i = 0; i < 3; i++) {
-		const m = new THREE.Mesh(geo, mat.clone());
-		m.rotation.x = -Math.PI / 2;
-		m.position.z = -(1.55 + i * 0.55);
-		g.add(m);
-	}
-	return g;
-}
-
-/**
- * White surf hugging the iceberg's edge.
- *
- * @param {Arena} arena
- * @param {number} k
- */
-function makeFoam(arena, k) {
-	const segs = 96;
-	/** @type {number[]} */
-	const pos = [];
-	/** @type {number[]} */
-	const idx = [];
-	for (let j = 0; j < segs; j++) {
-		const a = (j / segs) * Math.PI * 2;
-		const r = edgeRadius(arena, a) * k;
-		pos.push(Math.cos(a) * (r + 0.05), 0.02, Math.sin(a) * (r + 0.05));
-		pos.push(Math.cos(a) * (r + 0.55), 0.02, Math.sin(a) * (r + 0.55));
-	}
-	for (let j = 0; j < segs; j++) {
-		const a = j * 2;
-		const b = ((j + 1) % segs) * 2;
-		idx.push(a, b, a + 1, b, b + 1, a + 1);
-	}
-	const geo = new THREE.BufferGeometry();
-	geo.setAttribute('position', new THREE.Float32BufferAttribute(pos, 3));
-	geo.setIndex(idx);
-	return new THREE.Mesh(
-		geo,
-		new THREE.MeshBasicMaterial({
-			color: 0xffffff,
-			transparent: true,
-			opacity: 0.55,
-			depthWrite: false,
-			side: THREE.DoubleSide,
-		}),
-	);
-}
-
 function makeWater() {
 	const geo = new THREE.PlaneGeometry(140, 140, 90, 90);
 	geo.rotateX(-Math.PI / 2);
@@ -1377,49 +940,6 @@ function animateSnow(pts, dt) {
 }
 
 /**
- * @param {number} r
- * @param {number[]} shape
- */
-function makeFloe(r, shape) {
-	const s = new THREE.Shape();
-	shape.forEach((k, i) => {
-		const a = (i / shape.length) * Math.PI * 2;
-		const x = Math.cos(a) * r * k;
-		const y = Math.sin(a) * r * k;
-		if (i === 0) s.moveTo(x, y);
-		else s.lineTo(x, y);
-	});
-	s.closePath();
-	const geo = new THREE.ExtrudeGeometry(s, {
-		depth: 0.45,
-		bevelEnabled: true,
-		bevelSize: 0.12,
-		bevelThickness: 0.1,
-		bevelSegments: 2,
-	});
-	geo.rotateX(-Math.PI / 2);
-	geo.translate(0, -0.5, 0);
-	const g = new THREE.Group();
-	const top = new THREE.Mesh(geo, toon(0xf4fbff));
-	top.receiveShadow = true;
-	top.castShadow = true;
-	g.add(top);
-	// Cracks shown while it's about to sink.
-	const crack = new THREE.Group();
-	const cmat = new THREE.MeshBasicMaterial({ color: 0x4a90c0 });
-	for (let i = 0; i < 4; i++) {
-		const m = new THREE.Mesh(new THREE.BoxGeometry(r * 1.1, 0.02, 0.05), cmat);
-		m.position.y = 0.08;
-		m.rotation.y = i * 0.8 + 0.3;
-		crack.add(m);
-	}
-	crack.visible = false;
-	g.add(crack);
-	g.userData['crack'] = crack;
-	return g;
-}
-
-/**
  * @param {number} x
  * @param {number} y
  * @param {number} r
@@ -1478,26 +998,6 @@ function makeIgloo(x, y, r) {
 	return g;
 }
 
-/**
- * @param {number} x
- * @param {number} y
- * @param {number} r
- */
-function makeRock(x, y, r) {
-	const m = new THREE.Mesh(new THREE.DodecahedronGeometry(r, 0), toon(0x7d8796));
-	m.position.set(x, r * 0.45, y);
-	m.scale.y = 0.75;
-	m.rotation.y = x;
-	m.castShadow = true;
-	const cap = new THREE.Mesh(
-		new THREE.SphereGeometry(r * 0.75, 10, 6, 0, Math.PI * 2, 0, Math.PI / 2.5),
-		toon(0xffffff),
-	);
-	cap.position.y = r * 0.45;
-	m.add(cap);
-	return m;
-}
-
 function makeGiantSnowball() {
 	const geo = new THREE.IcosahedronGeometry(BALL_R, 3);
 	const p = geo.attributes['position'];
@@ -1514,30 +1014,6 @@ function makeGiantSnowball() {
 	m.castShadow = true;
 	m.receiveShadow = true;
 	return m;
-}
-
-/**
- * @param {number} x
- * @param {number} y
- * @param {number} h
- */
-function makeFlag(x, y, h) {
-	const g = new THREE.Group();
-	const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.03, 0.03, 1.4, 6), toon(0x8a5a3a));
-	pole.position.y = 0.7;
-	g.add(pole);
-	const flag = new THREE.Mesh(
-		new THREE.PlaneGeometry(0.5, 0.32),
-		new THREE.MeshToonMaterial({
-			color: 0xff5d73,
-			side: THREE.DoubleSide,
-			gradientMap: toonGradient(),
-		}),
-	);
-	flag.position.set(0.26, 1.22, 0);
-	g.add(flag);
-	g.position.set(x, h - 0.05, y);
-	return g;
 }
 
 /**

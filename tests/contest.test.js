@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { downhillAt, jarAt, makeArena } from '../public/src/arena.js';
+import { downhillDirs, jarAt, makeArena } from '../public/src/arena.js';
 import { BALL_GONE_MS, BALL_RESPAWN_MS } from '../public/src/constants.js';
 import {
 	applyClaim,
@@ -33,8 +33,7 @@ describe('contested claims', () => {
 	it('lets one penguin shove a resting giant snowball, then it respawns', () => {
 		const a = makeArena('hill', 2);
 		const c = freshContest(a.balls.length);
-		const home = a.balls[0];
-		const down = home && downhillAt(a, home.x, home.y);
+		const down = downhillDirs(a, 0)[0];
 		if (!down) throw new Error('ball should sit on a slope');
 		const angle = Math.atan2(down.y, down.x);
 		expect(ballAt(a, c, 0, 500).kind).toBe('rest');

@@ -4,7 +4,7 @@
  * Rebuilt now and then as the ice cracks away in sudden death.
  */
 
-import { capDist, edgeRadius, inHole, shrinkAt, wallsAt } from './arena.js';
+import { blocksAt, inBlock, onIsland, shrinkAt } from './arena.js';
 import { PENGUIN_R } from './constants.js';
 
 /** @typedef {import('./arena.js').Arena} Arena */
@@ -30,18 +30,28 @@ const cache = new WeakMap();
  */
 export function navFor(arena, t) {
 	const k = shrinkAt(t);
-	const walls = wallsAt(arena, t);
+	const walls = blocksAt(arena, t);
 	const hit = cache.get(arena);
-	if (hit && Math.abs(hit.shrink - k) < 0.02 && hit.walls === walls.length) return hit;
+	if (hit && Math.abs(hit.shrink - k) < 0.01 && hit.walls === walls.length) return hit;
 	const ok = new Uint8Array(N * N);
 	for (let j = 0; j < N; j++) {
 		for (let i = 0; i < N; i++) {
 			const x = -SPAN + (i + 0.5) * CELL;
 			const y = -SPAN + (j + 0.5) * CELL;
-			const edge = edgeRadius(arena, Math.atan2(y, x)) * k - 0.45;
-			if (Math.hypot(x, y) > edge) continue;
-			if (inHole(arena, x, y, 0.35)) continue;
-			if (walls.some((w) => capDist(w, x, y).d < PENGUIN_R * 0.8)) continue;
+			// Walkable: on the ice with a margin from the water, clear of blocks
+			// and the igloo. Tiles about to sink count as water already.
+			const soon = t + 2500;
+			const m = 0.32;
+			if (
+				!onIsland(arena, x, y, soon) ||
+				!onIsland(arena, x + m, y, soon) ||
+				!onIsland(arena, x - m, y, soon) ||
+				!onIsland(arena, x, y + m, soon) ||
+				!onIsland(arena, x, y - m, soon)
+			) {
+				continue;
+			}
+			if (inBlock(arena, t, x, y, PENGUIN_R * 0.8)) continue;
 			if (arena.obstacles.some((o) => Math.hypot(x - o.x, y - o.y) < o.r + PENGUIN_R * 0.8))
 				continue;
 			ok[j * N + i] = 1;

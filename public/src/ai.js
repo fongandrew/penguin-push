@@ -9,18 +9,18 @@
  */
 
 import {
-	capDist,
+	blocksAt,
+	CELL,
+	downhillDirs,
 	edginess,
 	floeAt,
 	jarAt,
 	jarIndicesAround,
-	shrinkAt,
-	wallsAt,
 	waveAt,
 } from './arena.js';
 import { BALL_R, PENGUIN_R, SHOVE_RANGE, SNOWBALL_RANGE } from './constants.js';
 import { ballAt, jarAvailable } from './contest.js';
-import { navFor, route, safeAhead } from './nav.js';
+import { clearLine, navFor, route, safeAhead } from './nav.js';
 import { angleDiff, floeUnder } from './physics.js';
 
 /** @typedef {import('./state.js').State} State */
@@ -119,11 +119,15 @@ export function botInput(state, p, t) {
 	const floe = fi >= 0 ? arena.floes[fi] : undefined;
 	const floeDanger = floe ? floeAt(floe, t).warn || floeAt(floe, t).sink > 0 : false;
 	const wave = waveAt(arena, t);
-	const shrinking = shrinkAt(t) < 1;
 
-	if (edge > 0.78 || floeDanger || (floe && Math.random() < 0.02)) {
+	if (floe && (floeDanger || Math.random() < 0.02)) {
 		gx = -p.x;
 		gy = -p.y;
+	} else if (edge > 0.78) {
+		// Back away from the water to the safest spot close by.
+		const safe = safestNear(state, p, t);
+		gx = safe.x - p.x;
+		gy = safe.y - p.y;
 	} else if (
 		wave &&
 		(wave.phase === 'warn' || wave.front < p.x * Math.cos(wave.dir) + p.y * Math.sin(wave.dir))
@@ -137,12 +141,10 @@ export function botInput(state, p, t) {
 				x: o.x + ux * (o.r + 0.6),
 				y: o.y + uy * (o.r + 0.6),
 			})),
-			...wallsAt(arena, t).map((w) => {
-				const mx = (w.ax + w.bx) / 2;
-				const my = (w.ay + w.by) / 2;
-				const c = capDist(w, mx + ux, my + uy);
-				return { x: c.px + c.nx * (w.r + 0.55), y: c.py + c.ny * (w.r + 0.55) };
-			}),
+			...blocksAt(arena, t).map((b) => ({
+				x: b.x + ux * (CELL / 2 + 0.55),
+				y: b.y + uy * (CELL / 2 + 0.55),
+			})),
 		];
 		let best = null;
 		let bestD = Infinity;
@@ -188,12 +190,23 @@ export function botInput(state, p, t) {
 				ballAt(arena, state.contest, brain.ball, t).kind === 'rest' &&
 				target
 			) {
-				// Line up uphill of the ball, opposite the victim, and charge.
-				const vx = target.x - ballHome.x;
-				const vy = target.y - ballHome.y;
-				const vd = Math.hypot(vx, vy) || 1;
-				const sx = ballHome.x - (vx / vd) * (BALL_R + PENGUIN_R + 0.5);
-				const sy = ballHome.y - (vy / vd) * (BALL_R + PENGUIN_R + 0.5);
+				// Pick the downhill lane that points best at the victim, get
+				// behind the ball (uphill), and charge.
+				let dir = { x: 0, y: 1 };
+				let best = -Infinity;
+				for (const d of downhillDirs(arena, brain.ball)) {
+					const vx = target.x - ballHome.x;
+					const vy = target.y - ballHome.y;
+					const along = vx * d.x + vy * d.y;
+					const off = Math.abs(vx * d.y - vy * d.x);
+					const score = along > 0 ? along - off * 3 : -99;
+					if (score > best) {
+						best = score;
+						dir = d;
+					}
+				}
+				const sx = ballHome.x - dir.x * (BALL_R + PENGUIN_R + 0.45);
+				const sy = ballHome.y - dir.y * (BALL_R + PENGUIN_R + 0.45);
 				const ds = Math.hypot(sx - p.x, sy - p.y);
 				if (ds > 0.45) {
 					gx = sx - p.x;
@@ -255,7 +268,11 @@ export function botInput(state, p, t) {
 	const nav = navFor(arena, t);
 	if (Math.hypot(gx, gy) > 0.05 && fi < 0) {
 		const wp = route(nav, p.x, p.y, p.x + gx, p.y + gy);
-		if (wp) {
+		if (!wp) {
+			// No way there (it's across the water): hold still rather than wade in.
+			gx = 0;
+			gy = 0;
+		} else {
 			const far = Math.hypot(gx, gy);
 			gx = wp.x - p.x;
 			gy = wp.y - p.y;
@@ -265,33 +282,35 @@ export function botInput(state, p, t) {
 			gy *= Math.max(1, Math.min(far, 3) / near);
 		}
 		// Last-moment feelers: never step into a hole or off the edge.
-		if (!safeAhead(nav, p.x, p.y, gx, gy, 0.7)) {
+		const look = 0.6 + p.speed * 0.2;
+		if (!safeAhead(nav, p.x, p.y, gx, gy, look)) {
 			const base = Math.atan2(gy, gx);
+			const mag = Math.hypot(gx, gy);
 			for (const da of [0.5, -0.5, 1, -1, 1.6, -1.6, 2.4, -2.4]) {
 				const ax = Math.cos(base + da);
 				const ay = Math.sin(base + da);
-				if (safeAhead(nav, p.x, p.y, ax, ay, 0.7)) {
-					gx = ax * Math.hypot(gx, gy);
-					gy = ay * Math.hypot(gx, gy);
+				if (safeAhead(nav, p.x, p.y, ax, ay, look)) {
+					gx = ax * mag;
+					gy = ay * mag;
 					break;
 				}
 			}
 		}
+		// Sliding toward the water? Brake against the slide.
+		const drift = Math.hypot(p.vx, p.vy);
+		if (drift > 1 && !safeAhead(nav, p.x, p.y, p.vx, p.vy, drift * 0.35 + 0.3)) {
+			gx = -p.vx / drift + gx * 0.2;
+			gy = -p.vy / drift + gy * 0.2;
+		}
 	}
-
-	// Don't walk off the edge while chasing.
-	const nd = Math.hypot(p.x, p.y) || 1;
-	const outward = (gx * p.x + gy * p.y) / nd;
-	if (outward > 0 && edge > (shrinking ? 0.55 : 0.65)) {
-		gx -= (p.x / nd) * outward * 1.3;
-		gy -= (p.y / nd) * outward * 1.3;
-	}
+	// Tiptoe near the water: ice is slippery and turns are wide.
+	const careful = edginess(arena, p.x, p.y, t) > 0.55 ? 0.6 : 1;
 
 	const gl = Math.hypot(gx, gy);
 	if (gl < 0.05) return { ...none, shove: wantShove, power: wantPower };
 	const noise = 0.25 * (1 - brain.skill);
 	const ang = Math.atan2(gy, gx) + Math.sin(brain.wobble * 3) * noise;
-	const sp = Math.min(1, gl / 0.6) * (0.75 + 0.25 * brain.skill);
+	const sp = Math.min(1, gl / 0.6) * (0.75 + 0.25 * brain.skill) * careful;
 	return { mx: Math.cos(ang) * sp, my: Math.sin(ang) * sp, shove: wantShove, power: wantPower };
 }
 
@@ -310,6 +329,34 @@ function nearestJar(state, p, t) {
 		const jar = jarAt(arena, i);
 		const d = Math.hypot(jar.x - p.x, jar.y - p.y);
 		if (d < 5.5 && (!best || d < best.d)) best = { x: jar.x, y: jar.y, d };
+	}
+	return best;
+}
+
+/**
+ * The least edge-y walkable spot within a couple of tiles.
+ *
+ * @param {State} state
+ * @param {Penguin} p
+ * @param {number} t
+ */
+function safestNear(state, p, t) {
+	const arena = /** @type {import('./arena.js').Arena} */ (state.arena);
+	const nav = navFor(arena, t);
+	let best = { x: p.x, y: p.y };
+	let bestE = edginess(arena, p.x, p.y, t);
+	for (const r of [0.8, 1.5, 2.3]) {
+		for (let s = 0; s < 12; s++) {
+			const a = (s / 12) * Math.PI * 2;
+			const x = p.x + Math.cos(a) * r;
+			const y = p.y + Math.sin(a) * r;
+			if (!clearLine(nav, p.x, p.y, x, y)) continue;
+			const e = edginess(arena, x, y, t) + r * 0.05;
+			if (e < bestE) {
+				bestE = e;
+				best = { x, y };
+			}
+		}
 	}
 	return best;
 }
