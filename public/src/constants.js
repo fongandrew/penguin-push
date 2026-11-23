@@ -48,8 +48,10 @@ export const BUMP_POWER = 0.9;
 export const BUMP_COOLDOWN_MS = 300;
 
 /** Belly slide (fish power). */
-export const SLIDE_SPEED = 10.5;
-export const SLIDE_MS = 650;
+export const SLIDE_SPEED = 9.5;
+export const SLIDE_MS = 560;
+/** How fast you can steer mid-slide (radians/s): curve, not U-turn. */
+export const SLIDE_TURN = 2.6;
 export const SLIDE_HIT = 12;
 export const SLIDE_USES = 3;
 

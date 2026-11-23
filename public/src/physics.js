@@ -25,7 +25,9 @@ import {
 	RESPAWN_HEIGHT,
 	RESPAWN_MS,
 	SLICK_DRAG,
+	SLIDE_MS,
 	SLIDE_SPEED,
+	SLIDE_TURN,
 	TEETER_MS,
 	TURN_GRIP,
 	WALK_ACCEL,
@@ -62,7 +64,17 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 	p.shoveMs = Math.max(0, p.shoveMs - ms);
 	p.cooldownMs = Math.max(0, p.cooldownMs - ms);
 	p.megaMs = Math.max(0, p.megaMs - ms);
+	const wasSliding = p.slideMs > 0;
 	p.slideMs = Math.max(0, p.slideMs - ms);
+	// A slide that just ran out drops you back to walking pace: no long
+	// skate afterwards. (One that ended in a hit keeps its recoil.)
+	if (wasSliding && p.slideMs === 0 && p.knockMs <= 0) {
+		const sp = Math.hypot(p.vx, p.vy);
+		if (sp > WALK_SPEED) {
+			p.vx *= WALK_SPEED / sp;
+			p.vy *= WALK_SPEED / sp;
+		}
+	}
 	p.modeMs += ms;
 
 	if (p.mode === 'out') return res;
@@ -128,10 +140,21 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 	}
 
 	if (p.slideMs > 0) {
-		// Belly slide: locked to the facing direction, no steering.
-		const sp = SLIDE_SPEED * (0.55 + 0.45 * (p.slideMs / 650));
-		p.vx = Math.cos(p.face) * sp;
-		p.vy = Math.sin(p.face) * sp;
+		// Belly slide: fast, steerable a little.
+		if (mx !== 0 || my !== 0) p.face = turnToward(p.face, Math.atan2(my, mx), SLIDE_TURN * dt);
+		const sp = SLIDE_SPEED * (0.55 + 0.45 * (p.slideMs / SLIDE_MS));
+		p.vx = Math.cos(p.face) * sp + here.vx;
+		p.vy = Math.sin(p.face) * sp + here.vy;
+		// About to slide off into the water? Stop on the brink (with a teeter)
+		// rather than flinging yourself in. Keep pushing and you go in, as
+		// with walking.
+		const look = PENGUIN_R * 0.5 + sp * dt * 2;
+		if (!supportAt(arena, p.x + Math.cos(p.face) * look, p.y + Math.sin(p.face) * look, t).ok) {
+			p.slideMs = 0;
+			p.vx = here.vx;
+			p.vy = here.vy;
+			p.teeterMs = Math.max(p.teeterMs, 1);
+		}
 	} else {
 		// Relative to whatever we're standing on, so a drifting floe carries us.
 		let rvx = p.vx - here.vx;
@@ -217,6 +240,19 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 		if (p.vy !== 0 && !supportAt(arena, p.x, ny + Math.sign(p.vy) * lead, t).ok) {
 			if (my * Math.sign(p.vy) > 0.2) leaning = true;
 			p.vy = here.vy;
+			teetering = true;
+		}
+		// A diagonal step can aim at water on the diagonal even when each axis
+		// on its own is fine (the checkerboard maps): test the combined step
+		// too, and drop the smaller component so you slide along the edge.
+		const cx = p.x + p.vx * dt + Math.sign(p.vx) * lead;
+		const cy = p.y + p.vy * dt + Math.sign(p.vy) * lead;
+		if (p.vx !== here.vx && p.vy !== here.vy && !supportAt(arena, cx, cy, t).ok) {
+			const leanX = mx * Math.sign(p.vx) > 0.2;
+			const leanY = my * Math.sign(p.vy) > 0.2;
+			if (leanX && leanY) leaning = true;
+			if (Math.abs(p.vx - here.vx) < Math.abs(p.vy - here.vy)) p.vx = here.vx;
+			else p.vy = here.vy;
 			teetering = true;
 		}
 	}

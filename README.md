@@ -23,7 +23,7 @@ online or against computer penguins, and the wins add up across a session.
 - ❤️ You start with 5 lives. Fall in and you lose one, then drop back in from the sky.
 - 🫙 Jars pop up on the ice. A **heart** jar gives you a life back. A **fish** jar gives you a power:
   - ❄️ **Snowballs** (×3): auto-aimed, and a hit makes a penguin dizzy for a moment.
-  - 🛷 **Belly slide** (×3): a fast dash that knocks anyone in the way flying.
+  - 🛷 **Belly slide** (×3): a fast dash that knocks anyone in the way flying. You can steer it a little, and it stops on the brink rather than tipping you into the sea.
   - 💪 **Mega flippers**: bigger, stronger shoves for 9 seconds.
 - The results screen shows a leaderboard. Wins add up for as long as the room (or the solo session) lasts.
 

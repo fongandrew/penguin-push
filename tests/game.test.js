@@ -337,3 +337,104 @@ describe('teetering at the edge', () => {
 		expect(me.mode).toBe('fall');
 	});
 });
+
+describe('belly slide', () => {
+	/**
+	 * All-ice board, us at the centre facing +x; water `gap` tiles to the east.
+	 *
+	 * @param {number} gap
+	 */
+	function setup(gap) {
+		const s = soloMatch('grid', 3, 0);
+		const arena = s.arena;
+		if (!arena) throw new Error('arena');
+		arena.level.fill(0);
+		arena.block.fill(0);
+		arena.blocks.length = 0;
+		arena.slick.fill(0);
+		arena.crack.fill(Infinity);
+		const me = s.penguins[0];
+		if (!me) throw new Error('roster');
+		const start = tileCenter(
+			arena,
+			Math.floor(arena.n / 2) * arena.n + Math.floor(arena.n / 2),
+		);
+		const water = Math.floor(arena.n / 2) + gap;
+		for (let j = 0; j < arena.n; j++)
+			for (let i = water; i < arena.n; i++) arena.level[j * arena.n + i] = -1;
+		for (const p of s.penguins.slice(1)) {
+			p.x = -99;
+			p.mode = 'out';
+		}
+		me.x = start.x;
+		me.y = start.y;
+		me.face = 0;
+		me.power = 'slide';
+		me.uses = 3;
+		me.invulnMs = 0;
+		return { s, me, arena };
+	}
+
+	it('stops on the brink instead of sliding into the water', () => {
+		const { s, me } = setup(2);
+		const own = {
+			owns: (/** @type {number} */ pid) => pid === 0,
+			send: () => {},
+			claim: () => {},
+		};
+		tick(s, own, s.t + 16, STEP, { ...IDLE, power: true });
+		run(s, own, 1500);
+		expect(me.mode).toBe('play');
+	});
+
+	it('still hits hard when it connects', () => {
+		const { s, me } = setup(9);
+		const them = s.penguins[1];
+		if (!them) throw new Error('roster');
+		them.mode = 'play';
+		them.x = me.x + 2;
+		them.y = me.y;
+		them.invulnMs = 0;
+		them.stunMs = 1e9;
+		const both = {
+			owns: (/** @type {number} */ pid) => pid < 2,
+			send: () => {},
+			claim: () => {},
+		};
+		const x0 = them.x;
+		tick(s, both, s.t + 16, STEP, { ...IDLE, power: true });
+		for (let i = 0; i < 60 * 2; i++) tick(s, both, s.t + STEP * 1000, STEP, IDLE);
+		expect(them.x - x0).toBeGreaterThan(2.5);
+	});
+
+	it('catches a diagonal step aimed at a water square on the diagonal', () => {
+		const s = soloMatch('grid', 3, 0);
+		const arena = s.arena;
+		const me = s.penguins[0];
+		if (!arena || !me) throw new Error('setup');
+		arena.level.fill(0);
+		arena.block.fill(0);
+		arena.blocks.length = 0;
+		arena.slick.fill(0);
+		const n = arena.n;
+		const k = Math.floor(n / 2) * n + Math.floor(n / 2);
+		arena.level[k + n + 1] = -1; // water diagonally down-right only
+		for (const p of s.penguins.slice(1)) {
+			p.x = -99;
+			p.mode = 'out';
+		}
+		const c = tileCenter(arena, k);
+		me.x = c.x;
+		me.y = c.y;
+		me.invulnMs = 0;
+		const own = {
+			owns: (/** @type {number} */ pid) => pid === 0,
+			send: () => {},
+			claim: () => {},
+		};
+		run(s, own, 250, { ...IDLE, mx: Math.SQRT1_2, my: Math.SQRT1_2 });
+		expect(me.mode).toBe('play');
+		run(s, own, 600);
+		expect(me.mode).toBe('play');
+	});
+});
