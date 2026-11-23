@@ -199,7 +199,39 @@ export function loadLook() {
 	} catch {
 		// private mode or bad JSON
 	}
-	return defaultLook();
+	// First visit: a surprise outfit, kept from now on.
+	const look = randomLook(Math.random);
+	saveLook(look);
+	return look;
+}
+
+/** Names for a brand-new player (all different from the computer penguins'). */
+export const STARTER_NAMES = [
+	'Pip',
+	'Mochi',
+	'Noodle',
+	'Peanut',
+	'Pickle',
+	'Dumpling',
+	'Frosty',
+	'Popsicle',
+	'Biscuit',
+	'Waffles',
+	'Bubbles',
+	'Nugget',
+	'Sprout',
+	'Jellybean',
+	'Cocoa',
+	'Maple',
+	'Blizzard',
+	'Snowdrop',
+	'Tofu',
+	'Marshmallow',
+];
+
+/** @returns {string} */
+export function randomName() {
+	return STARTER_NAMES[Math.floor(Math.random() * STARTER_NAMES.length)] ?? 'Pip';
 }
 
 /** @param {Look} look */

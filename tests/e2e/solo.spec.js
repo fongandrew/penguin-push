@@ -10,12 +10,21 @@ test('title → changing station → solo match → leaderboard', async ({ page 
 	await page.click('#btn-play');
 	await expect(page.locator('#station')).toBeVisible();
 
+	// A brand-new player starts with a random name and outfit, already saved.
+	const start = await page.evaluate(() => ({
+		look: window.__game.state.look,
+		name: window.__game.state.name,
+		saved: localStorage.getItem('penguin-push:look'),
+	}));
+	expect(start.saved).toBe(JSON.stringify(start.look));
+	expect(start.name).not.toBe('Penguin');
+
 	// Dress up: the look is saved and shows in the match.
 	await page.click('[aria-label="Next Hat"]');
 	await page.click('[aria-label="Next Penguin"]');
 	const look = await page.evaluate(() => window.__game.state.look);
-	expect(look.hat).toBe(2);
-	expect(look.species).toBe(1);
+	expect(look.hat).toBe((start.look.hat + 1) % 9);
+	expect(look.species).toBe((start.look.species + 1) % 7);
 
 	await page.click('text=Play vs Computer');
 	await page.click('[data-map="hill"]');

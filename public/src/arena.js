@@ -207,34 +207,33 @@ export function makeArena(id, seed) {
 	};
 
 	if (id === 'hill') {
-		// A stepped ice pyramid to the north. Two snowballs sit on its front
-		// corners; each can roll down the steps along its row or column.
+		// A stepped ice pyramid to the north. Two snowballs sit on the middle
+		// of its front edge, where the only way down is south — into a wide
+		// lane of clear ice that runs all the way to the shore.
 		arena.hill = true;
 		const core = { i0: 5, i1: 9, j0: 3, j1: 5 };
+		/** The snowball lane: the pyramid's width, from its foot to the sea. */
+		const inLane = (/** @type {number} */ i, /** @type {number} */ j) =>
+			i >= core.i0 && i <= core.i1 && j > core.j1;
 		for (let j = 0; j < n; j++) {
 			for (let i = 0; i < n; i++) {
 				if (!land(i, j)) continue;
 				const d = Math.max(core.i0 - i, i - core.i1, core.j0 - j, j - core.j1, 0);
 				set(i, j, Math.max(0, 3 - d));
-				// Water pillars across the lowlands.
-				if (d >= 4 && odd(i, j) && !nearStart(i, j)) set(i, j, -1);
+				// Water pillars across the lowlands, but never in the lane.
+				if (d >= 4 && odd(i, j) && !nearStart(i, j) && !inLane(i, j)) set(i, j, -1);
 			}
 		}
 		for (const [i, j] of [
-			[core.i0, core.j1],
-			[core.i1, core.j1],
+			[core.i0 + 1, core.j1],
+			[core.i1 - 1, core.j1],
 		]) {
 			const k = idx(arena, i ?? 0, j ?? 0);
 			const c = tileCenter(arena, k);
 			arena.balls.push({ k, x: c.x, y: c.y, r: BALL_R });
 		}
-		// A few ice blocks, kept out of the snowball lanes.
-		scatterBlocks(
-			arena,
-			rng,
-			0.08,
-			(i, j) => i === core.i0 || i === core.i1 || j === core.j1 || nearStart(i, j),
-		);
+		// A few ice blocks, kept out of the lane.
+		scatterBlocks(arena, rng, 0.08, (i, j) => inLane(i, j) || j === core.j1 || nearStart(i, j));
 	} else if (id === 'floes') {
 		// Four little islands split by a cross of water, joined by one-tile
 		// bridges, with rafts drifting round the outside.

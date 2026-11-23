@@ -31,7 +31,7 @@ online or against computer penguins, and the wins add up across a session.
 
 Every map is a **grid of ice blocks** stuck together, like a Bomberman board turned inside out: the board is ice and the "pillars" are **water squares** you can be shoved into. **Ice blocks** sit on some tiles. You can't walk through them, they stop low snowballs (a long throw arcs over), they block waves, and they stop giant snowballs.
 
-- ⛄ **Snowball Hill**: a stepped pyramid of stacked ice. A giant snowball sits on each front corner of the top, above a checkerboard of water squares. Snowballs **only roll downhill**: you have to push from the uphill side, and arrows on the steps show the ways each one can go. A snowball rolls straight along its row or column, speeds up at every step down, bowls over anyone in the way, and drops into the first water it meets. Then a new one appears at the top.
+- ⛄ **Snowball Hill**: a stepped pyramid of stacked ice. Two giant snowballs sit on the middle of its front edge, where the only way down is south: a wide lane of clear ice (no water squares, no blocks) running from the pyramid's foot to the shore. Snowballs **only roll downhill**, so get behind one and push. Arrows on the steps show the way. A snowball speeds up at every step, bowls over anyone in the lane, and rolls the whole length of the island into the sea. Then a new one appears at the top. Water squares dot the rest of the lowlands.
 - 🧊 **Floe Frenzy**: four little islands split by a cross of water, joined by one-tile bridges, with 2×2 rafts drifting around the outside. The rafts crack and sink now and then.
 - 🌊 **Igloo Cove**: red arrows warn of a big wave. It shoves everyone across the ice unless you hide behind the igloo or an ice block. There are holes, and slippery polished tiles.
 - 🔲 **Ice Grid**: the full inside-out Bomberman board, with water at every other tile and ice blocks scattered on the rest. It's different every match.
@@ -40,6 +40,8 @@ Every map is a **grid of ice blocks** stuck together, like a Bomberman board tur
 **Sudden death** starts after 75 seconds. Tiles shake, then sink one by one from the outside in, until only a small connected patch in the middle is left. The ice blocks crumble too, and heart jars stop appearing.
 
 ### Changing station
+
+A brand-new player gets a random penguin name and a surprise outfit, saved straight away; change either whenever you like.
 
 Pick a penguin type (Classic, Emperor, Rockhopper, Gentoo, Little Blue, Fluffy Chick, Bubblegum), a hat (beanie, top hat, party hat, crown, bow, viking, propeller, flower), a scarf, stripy scarf, bow tie or cape, colours, and glasses. Your look is saved, and friends see it online.
 

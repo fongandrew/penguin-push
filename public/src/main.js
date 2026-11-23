@@ -9,7 +9,7 @@ import { buildId, GAME_ID, serverUrl } from './config.js';
 import { BOT_NAMES, COUNTDOWN_MS, STEP } from './constants.js';
 import { celebrationOver, startMatch, tick } from './game.js';
 import { Controls } from './input.js';
-import { loadLook, randomLook, saveLook } from './looks.js';
+import { loadLook, randomLook, randomName, saveLook } from './looks.js';
 import { botLook, makeRoster, MAP_CHOICES, Session } from './multi.js';
 import { createRoom, NetClient } from './net/client.js';
 import { isValidCode, normalizeCode } from './net/codes.js';
@@ -404,7 +404,7 @@ export function start() {
 	});
 	$('name').addEventListener('input', () => {
 		const v = /** @type {HTMLInputElement} */ ($('name')).value.trim().slice(0, 12);
-		state.name = v || 'Penguin';
+		state.name = v || state.name;
 		saveName(state.name);
 	});
 	click('btn-solo-start', startSolo);
@@ -661,9 +661,14 @@ export function start() {
 /** @returns {string} */
 function loadName() {
 	try {
-		return localStorage.getItem(NAME_KEY) || 'Penguin';
+		const saved = localStorage.getItem(NAME_KEY);
+		if (saved) return saved;
+		// First visit: a random penguin name, kept from now on.
+		const name = randomName();
+		localStorage.setItem(NAME_KEY, name);
+		return name;
 	} catch {
-		return 'Penguin';
+		return randomName();
 	}
 }
 

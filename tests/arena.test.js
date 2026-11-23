@@ -149,7 +149,10 @@ describe('giant snowballs on the stepped hill', () => {
 						(roll.pts[n - 2] ?? 0) - home.x,
 						(roll.pts[n - 1] ?? 0) - home.y,
 					);
-					expect(dist).toBeGreaterThan(CELL * 2.5);
+					// Down the wide, clear lane all the way to the sea.
+					expect(d.y).toBe(1);
+					expect(roll.end).toBe('splash');
+					expect(dist).toBeGreaterThan(CELL * 6);
 					expect(rollPath(a, i, angle + 0.2, 1000)).toBe(roll);
 				}
 			});
