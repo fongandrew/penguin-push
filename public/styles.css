@@ -962,8 +962,23 @@ body.on-station #btn-mute {
 	right: calc(10px + var(--safe-right));
 }
 
-body.playing #btn-mute {
+body.playing #btn-mute,
+body.playing #btn-music {
 	display: none;
+}
+
+.corner.right.second {
+	right: calc(56px + var(--safe-right));
+}
+
+#btn-music.off {
+	opacity: 0.45;
+	text-decoration: line-through;
+}
+
+body.on-station #btn-music {
+	right: auto;
+	left: calc(56px + var(--safe-left));
 }
 
 #netstatus {

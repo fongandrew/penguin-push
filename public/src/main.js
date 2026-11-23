@@ -11,6 +11,7 @@ import { celebrationOver, startMatch, tick } from './game.js';
 import { Controls } from './input.js';
 import { loadLook, randomLook, randomName, saveLook } from './looks.js';
 import { botLook, makeRoster, MAP_CHOICES, Session } from './multi.js';
+import { musicOn, playJingle, playSong, setMusic } from './music.js';
 import { createRoom, NetClient } from './net/client.js';
 import { isValidCode, normalizeCode } from './net/codes.js';
 import { Portraits, Renderer } from './render.js';
@@ -41,6 +42,8 @@ const STEP_MS = STEP * 1000;
 const SOLO_KEY = 'penguin-push:solo';
 const NAME_KEY = 'penguin-push:name';
 const JOIN_GIVE_UP_MS = 7000;
+/** Never wait longer than this for a room, however slow the connection. */
+const JOIN_MAX_MS = 30000;
 
 export function start() {
 	const state = makeState();
@@ -353,9 +356,20 @@ export function start() {
 		history.replaceState(null, '', url);
 		client.connect();
 		go('lobby');
-		setTimeout(() => {
-			if (!welcomed && online?.client === client) failJoin(`Couldn’t join room ${code}.`);
-		}, JOIN_GIVE_UP_MS);
+		// Give up only if the connection is actually failing (retrying), not
+		// just slow: a busy phone on a poor network can take a while to open
+		// the first socket. Hard stop after JOIN_MAX_MS either way.
+		const started = Date.now();
+		const check = () => {
+			if (welcomed || online?.client !== client) return;
+			const slow = client.state === 'connecting' || client.state === 'live';
+			if (slow && Date.now() - started < JOIN_MAX_MS) {
+				setTimeout(check, 1000);
+				return;
+			}
+			failJoin(`Couldn’t join room ${code}.`);
+		};
+		setTimeout(check, JOIN_GIVE_UP_MS);
 	}
 
 	/** @param {string} msg */
@@ -458,6 +472,18 @@ export function start() {
 			go('solo');
 		}
 	});
+	const music = $('btn-music');
+	const drawMusic = () => {
+		music.textContent = '🎵';
+		music.classList.toggle('off', !musicOn());
+		music.setAttribute('aria-label', musicOn() ? 'Music on' : 'Music off');
+	};
+	drawMusic();
+	music.addEventListener('click', () => {
+		unlockAudio();
+		setMusic(!musicOn());
+		drawMusic();
+	});
 	const mute = $('btn-mute');
 	const drawMute = () => (mute.textContent = isMuted() ? '🔇' : '🔊');
 	drawMute();
@@ -506,6 +532,7 @@ export function start() {
 		const dt = dtMs / 1000;
 		time += dt;
 		online?.session.frame(dtMs);
+		playSong(songFor());
 
 		if (screen === 'station') {
 			renderer.renderStation(state.look, time, dt, innerWidth / innerHeight < 0.9);
@@ -529,6 +556,13 @@ export function start() {
 		renderer.renderGame(demo, time, dt, { attract: true });
 		demo.fx.length = 0;
 		if (celebrationOver(demo)) startDemo();
+	}
+
+	/** Which loop fits the moment. */
+	function songFor() {
+		if (screen !== 'game' || !state.arena) return 'menu';
+		if (state.mode === 'done') return 'menu';
+		return shrinkAt(Math.max(0, state.t)) < 1 ? 'danger' : 'match';
 	}
 
 	/** @param {State} s */
@@ -603,7 +637,8 @@ export function start() {
 		}
 		if (state.mode === 'done' && !announcedEnd) {
 			announcedEnd = true;
-			sfx('win');
+			if (musicOn() && !isMuted()) playJingle('win');
+			else sfx('win');
 		}
 	}
 

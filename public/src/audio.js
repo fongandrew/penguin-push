@@ -4,6 +4,11 @@
 
 /** @type {AudioContext | null} */
 let ctx = null;
+/** Sound effects and music each get their own volume control. */
+/** @type {GainNode | null} */
+let sfxBus = null;
+/** @type {GainNode | null} */
+let musicBus = null;
 let muted = false;
 try {
 	muted = localStorage.getItem('penguin-push:muted') === '1';
@@ -20,6 +25,48 @@ export function unlockAudio() {
 	const AC = window.AudioContext ?? /** @type {any} */ (window).webkitAudioContext;
 	if (!AC) return;
 	ctx = new AC();
+	sfxBus = ctx.createGain();
+	sfxBus.connect(ctx.destination);
+	musicBus = ctx.createGain();
+	musicBus.gain.value = muted ? 0 : MUSIC_LEVEL;
+	musicBus.connect(ctx.destination);
+	for (const fn of onUnlock) fn();
+}
+
+/** Music sits under the sound effects. */
+const MUSIC_LEVEL = 0.32;
+
+/** @type {(() => void)[]} */
+const onUnlock = [];
+
+/**
+ * Run `fn` once audio is unlocked (now, if it already is).
+ *
+ * @param {() => void} fn
+ */
+export function whenAudioReady(fn) {
+	if (ctx) fn();
+	else onUnlock.push(fn);
+}
+
+/** The shared context and the music bus, for music.js. */
+export function musicOutput() {
+	return ctx && musicBus ? { ctx, bus: musicBus } : null;
+}
+
+/**
+ * Dip the music for a moment so a big sound effect cuts through.
+ *
+ * @param {number} depth 0..1, how far to dip.
+ */
+function duck(depth) {
+	if (!ctx || !musicBus || muted) return;
+	const g = musicBus.gain;
+	const t = ctx.currentTime;
+	g.cancelScheduledValues(t);
+	g.setValueAtTime(g.value, t);
+	g.linearRampToValueAtTime(MUSIC_LEVEL * (1 - depth), t + 0.04);
+	g.linearRampToValueAtTime(MUSIC_LEVEL, t + 0.6);
 }
 
 export function isMuted() {
@@ -29,6 +76,10 @@ export function isMuted() {
 /** @param {boolean} m */
 export function setMuted(m) {
 	muted = m;
+	if (ctx && musicBus) {
+		musicBus.gain.cancelScheduledValues(ctx.currentTime);
+		musicBus.gain.value = m ? 0 : MUSIC_LEVEL;
+	}
 	try {
 		localStorage.setItem('penguin-push:muted', m ? '1' : '0');
 	} catch {
@@ -54,7 +105,7 @@ function tone(freq, dur, type, vol, slide, delay = 0) {
 	if (slide) o.frequency.exponentialRampToValueAtTime(slide, t + dur);
 	g.gain.setValueAtTime(vol, t);
 	g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-	o.connect(g).connect(ctx.destination);
+	o.connect(g).connect(sfxBus ?? ctx.destination);
 	o.start(t);
 	o.stop(t + dur + 0.02);
 }
@@ -80,7 +131,9 @@ function noise(dur, vol, cutoff) {
 	const g = ctx.createGain();
 	g.gain.setValueAtTime(vol, t);
 	g.gain.exponentialRampToValueAtTime(0.001, t + dur);
-	src.connect(f).connect(g).connect(ctx.destination);
+	src.connect(f)
+		.connect(g)
+		.connect(sfxBus ?? ctx.destination);
 	src.start(t);
 }
 
@@ -95,6 +148,7 @@ export function sfx(name) {
 	const now = performance.now();
 	if (now - (lastPlayed[name] ?? 0) < 45) return;
 	lastPlayed[name] = now;
+	if (name === 'splash' || name === 'kick' || name === 'out') duck(0.5);
 	switch (name) {
 		case 'slap':
 			noise(0.08, 0.25, 3000);

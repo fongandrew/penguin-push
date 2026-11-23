@@ -59,6 +59,14 @@ npm run build        # dist/: minified, SW precache + version.json stamped
 npm run deploy       # build + netlify deploy --prod --dir=dist (link a Netlify site first)
 ```
 
+### Music
+
+The soundtrack is synthesized live in the browser, with no audio files. `songs.js` holds the song sheets: tempo, chords and notes on a 16th-note grid, all in C major. `music.js` plays them on little Web Audio instruments (bell, pluck, bass, chord stab, kick, snare, hi-hat), scheduled slightly ahead on the audio clock so timing stays tight.
+
+- A calm theme plays on the menus, a bouncy one in matches, and a faster, driving one once the ice starts cracking. A short fanfare plays when someone wins.
+- Themes change at the next bar line, and the music dips briefly under big sound effects (splashes, giant snowballs).
+- 🎵 turns the music off on its own, and 🔊 mutes everything. Both settings are remembered.
+
 ### Offline and updates
 
 `public/sw.js` is a service worker. `npm run build` stamps it with a version hash and the full list of shipped files. The first visit caches the whole game, so it then plays **offline**, including `?room=` links (solo play works offline; friend rooms need the network). On each visit, and whenever the tab comes back into view, the page checks for a new deploy. The new version installs in the background and is used from the next launch, but never mid-match in a friend room. The worker is off on `localhost` so dev edits show up immediately; add `?sw=1` to test it locally.
@@ -102,6 +110,7 @@ How the game maps onto netplay's three state categories (`public/src/multi.js`):
 | `contest.js` | contested-claim reducer |
 | `multi.js` / `solo.js` | online session (wire format, ownership, keyframes) / solo link |
 | `penguin3d.js` / `render.js` | penguin models + animation / the Three.js scene |
+| `songs.js` / `music.js` | the soundtrack as data / the synth and sequencer that plays it |
 | `ui.js` / `input.js` / `audio.js` / `main.js` | DOM screens, touch stick + buttons, synth SFX, wiring |
 
 The test hook `window.__game` exposes `state`, `startSolo`, `teleport`, `kickBall`,
