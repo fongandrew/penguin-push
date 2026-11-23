@@ -250,6 +250,8 @@ button {
 }
 
 .small.primary {
+	background: var(--pink);
+	color: white;
 	box-shadow: 0 4px 0 #c23461;
 }
 

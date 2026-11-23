@@ -30,6 +30,11 @@ test('two friends play a match and share a leaderboard', async ({ browser }) => 
 	await b.waitForFunction(() => window.__game.online()?.session.players.size === 2);
 	await expect(b.locator('#lobby-wait')).toContainText('Waiting for Ana');
 
+	// Two people: room for at most two computer penguins, and none is allowed.
+	await expect(a.locator('#lobby-bots [data-bots]')).toHaveCount(3);
+	await expect(a.locator('#lobby-bots [data-bots="3"]')).toHaveCount(0);
+	await expect(a.locator('#lobby-bots [data-bots="0"]')).toHaveCount(1);
+
 	// The host's settings show up for the guest.
 	await a.click('[data-bots="1"]');
 	await b.waitForFunction(() => window.__game.online().session.settings.bots === 1);

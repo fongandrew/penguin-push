@@ -171,6 +171,8 @@ export function start() {
 		$('lobby-code').textContent = online.code;
 		const players = s.lobbyPlayers();
 		const hostSlot = s.hostSlot();
+		/** People who'll be in the match (connected, at most 4). */
+		const people = Math.min(4, players.filter((p) => p.connected).length);
 		const humans = players.slice(0, 4).map((p) => ({
 			name: p.name,
 			look: p.look,
@@ -179,10 +181,8 @@ export function start() {
 			host: p.slot === hostSlot,
 			bot: false,
 		}));
-		const bots = Math.max(
-			humans.length < 2 ? 2 - humans.length : 0,
-			Math.min(s.settings.bots, 4 - humans.length),
-		);
+		// Same rule as the match roster (multi.js makeRoster).
+		const bots = Math.max(people < 2 ? 2 - people : 0, Math.min(s.settings.bots, 4 - people));
 		const botLooks = [0, 1, 2].map((i) => botLook(s.roomSeed, i));
 		for (let i = 0; i < bots; i++) {
 			humans.push({
@@ -204,7 +204,8 @@ export function start() {
 				s.setSettings(next);
 				sfx('click');
 			},
-			0,
+			people < 2 ? 2 - people : 0,
+			Math.max(0, 4 - people),
 		);
 		const host = s.isHost();
 		$('btn-lobby-start').hidden = !host;

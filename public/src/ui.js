@@ -161,8 +161,9 @@ let stationTab = 'species';
  * @param {boolean} editable
  * @param {(next: { map?: string, bots?: number }) => void} onChange
  * @param {number} minBots
+ * @param {number} [maxBots] Room left for computer penguins (4 minus the people).
  */
-export function renderSettings(maps, bots, settings, editable, onChange, minBots) {
+export function renderSettings(maps, bots, settings, editable, onChange, minBots, maxBots = 3) {
 	maps.innerHTML = '';
 	const opts = [{ id: 'mix', name: 'Mix it up', emoji: '🔀' }, ...MAPS];
 	for (const m of opts) {
@@ -176,11 +177,13 @@ export function renderSettings(maps, bots, settings, editable, onChange, minBots
 		maps.append(b);
 	}
 	bots.innerHTML = '';
-	for (let n = minBots; n <= 3; n++) {
+	// Show what the match will actually use, clamped to the room left.
+	const chosen = Math.max(minBots, Math.min(maxBots, settings.bots));
+	for (let n = minBots; n <= Math.max(minBots, maxBots); n++) {
 		const b = button(
 			`<span class="em">${n === 0 ? '🚫' : '🤖'.repeat(n)}</span>${n === 0 ? 'None' : n}`,
 			() => onChange({ bots: n }),
-			`choice${settings.bots === n ? ' on' : ''}`,
+			`choice${chosen === n ? ' on' : ''}`,
 		);
 		b.disabled = !editable;
 		b.dataset['bots'] = String(n);
