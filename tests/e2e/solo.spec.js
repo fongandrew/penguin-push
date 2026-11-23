@@ -20,7 +20,9 @@ test('title → changing station → solo match → leaderboard', async ({ page 
 	expect(start.name).not.toBe('Penguin');
 
 	// Dress up: the look is saved and shows in the match.
+	await page.click('[data-tab="hat"]');
 	await page.click('[aria-label="Next Hat"]');
+	await page.click('[data-tab="species"]');
 	await page.click('[aria-label="Next Penguin"]');
 	const look = await page.evaluate(() => window.__game.state.look);
 	expect(look.hat).toBe((start.look.hat + 1) % 9);

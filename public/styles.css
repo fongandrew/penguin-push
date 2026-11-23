@@ -321,55 +321,36 @@ button {
 
 #station {
 	justify-content: flex-end;
-	align-items: stretch;
+	align-items: center;
+	padding-bottom: calc(10px + var(--safe-bottom));
 }
 
+/* Name at the top, options scroll in the middle, play buttons always visible. */
 #station-panel {
-	align-self: center;
-	width: min(460px, 100%);
-	padding: 10px 14px 12px;
-	max-height: 62%;
-	overflow-y: auto;
-}
-
-#station-panel .name {
-	margin-bottom: 4px;
-}
-
-#station-panel .name input {
-	font-size: 16px;
-	padding: 5px 10px;
+	width: min(440px, 100%);
+	padding: 14px 14px 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+	overflow: hidden;
 }
 
 #station-panel h2 {
 	font-size: 20px;
-	margin-bottom: 4px;
+	margin: 0;
 }
 
-@media (min-aspect-ratio: 9/10) {
-	#station {
-		justify-content: center;
-		align-items: flex-end;
-	}
-	#station-panel {
-		align-self: auto;
-		margin-right: 2vw;
-		width: min(440px, 52vw);
-		max-height: 100%;
-	}
+.st-head {
+	display: flex;
+	align-items: center;
+	gap: 10px;
+	flex: none;
 }
 
-@media (max-height: 520px) {
-	#station-panel h2 {
-		display: none;
-	}
-	.swatch {
-		width: 22px;
-		height: 22px;
-	}
-	.opt button {
-		height: 28px;
-	}
+.st-head .name {
+	flex: 1;
+	min-width: 0;
+	margin: 0;
 }
 
 .name {
@@ -377,7 +358,6 @@ button {
 	align-items: center;
 	gap: 10px;
 	font-weight: 800;
-	margin-bottom: 8px;
 }
 
 .name input,
@@ -396,31 +376,84 @@ button {
 	min-width: 0;
 }
 
-.opt {
-	display: grid;
-	grid-template-columns: 70px 40px 1fr 40px;
-	align-items: center;
-	gap: 6px;
-	margin: 3px 0;
+.dice {
+	flex: none;
+	width: 44px;
+	height: 44px;
+	border-radius: 14px;
+	background: #eef6fc;
+	box-shadow: 0 3px 0 #c5d9e8;
+	font-size: 24px;
 }
 
-.opt .lbl {
+.dice:active {
+	transform: translateY(2px);
+}
+
+#station-rows {
+	flex: none;
+	display: flex;
+	flex-direction: column;
+	gap: 10px;
+}
+
+.tabs {
+	display: grid;
+	grid-template-columns: repeat(4, 1fr);
+	gap: 6px;
+}
+
+.tab {
+	padding: 6px 2px 5px;
+	border-radius: 12px;
+	background: #eef6fc;
+	box-shadow: 0 3px 0 #c5d9e8;
 	font-weight: 800;
-	font-size: 13px;
-	opacity: 0.7;
-	text-transform: uppercase;
+	font-size: 12px;
+	line-height: 1.1;
+}
+
+.tab .em {
+	display: block;
+	font-size: 20px;
+	margin-bottom: 2px;
+}
+
+.tab.on {
+	background: var(--sea);
+	color: white;
+	box-shadow: 0 3px 0 #1b6ea3;
+}
+
+.group {
+	background: #f2f8fd;
+	border-radius: 16px;
+	padding: 12px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+
+.opt {
+	display: grid;
+	grid-template-columns: 48px 1fr 48px;
+	align-items: center;
+	gap: 10px;
 }
 
 .opt .val {
 	text-align: center;
-	font-weight: 800;
-	font-size: 16px;
+	font-weight: 900;
+	font-size: 19px;
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
 }
 
 .opt button {
-	height: 32px;
-	border-radius: 12px;
-	background: #eef6fc;
+	height: 44px;
+	border-radius: 14px;
+	background: white;
 	box-shadow: 0 3px 0 #c5d9e8;
 	font-weight: 900;
 	font-size: 18px;
@@ -428,15 +461,22 @@ button {
 
 .swatches {
 	display: flex;
-	gap: 5px;
+	gap: 8px;
 	justify-content: center;
-	margin: 2px 0 6px;
-	flex-wrap: nowrap;
+	min-height: 30px;
+}
+
+.swatches.off {
+	opacity: 0.25;
+}
+
+.swatches.none {
+	display: none;
 }
 
 .swatch {
-	width: 26px;
-	height: 26px;
+	width: 30px;
+	height: 30px;
 	flex: none;
 	border-radius: 50%;
 	border: 3px solid white;
@@ -447,25 +487,121 @@ button {
 	box-shadow: 0 0 0 3px var(--ink);
 }
 
+@media (max-width: 360px) {
+	.swatches {
+		gap: 5px;
+	}
+	.swatch {
+		width: 26px;
+		height: 26px;
+	}
+}
+
 #station-go {
-	margin-top: 6px;
+	flex: none;
+	margin: 0;
 	gap: 8px;
+	align-items: stretch;
+}
+
+#station-go {
+	flex-direction: row;
+	flex-wrap: wrap;
 }
 
 #station-go .big {
 	min-width: 0;
-	width: 100%;
-	font-size: 19px;
-	padding: 10px 20px;
+	flex: 1 1 40%;
+	font-size: 16px;
+	line-height: 1.15;
+	padding: 10px 10px;
 }
 
 #station-go .link {
-	padding: 0;
+	flex-basis: 100%;
+	text-align: center;
 }
 
-#station .row-buttons .small {
-	padding: 6px 14px;
-	font-size: 14px;
+#station-go .link {
+	padding: 2px;
+	align-self: center;
+}
+
+/* Landscape: the panel takes the right side, full height. */
+@media (min-aspect-ratio: 9/10) {
+	#station {
+		justify-content: center;
+		align-items: flex-end;
+		padding-top: calc(12px + var(--safe-top));
+		padding-bottom: calc(12px + var(--safe-bottom));
+	}
+	#station-panel {
+		width: min(430px, 50vw);
+		max-height: 100%;
+		margin-right: 1vw;
+		overflow-y: auto;
+	}
+	/* Two play buttons side by side to save height. */
+	#station-go {
+		flex-direction: row;
+		flex-wrap: wrap;
+	}
+	#station-go .big {
+		flex: 1 1 40%;
+		font-size: 16px;
+		padding: 10px 12px;
+	}
+	#station-go .link {
+		flex-basis: 100%;
+		text-align: center;
+	}
+}
+
+/* Short screens: drop the heading, it's obvious where you are. */
+@media (max-height: 760px) {
+	#station-panel h2 {
+		display: none;
+	}
+}
+
+/* Landscape phones: tighten everything so the play buttons fit. */
+@media (max-height: 480px) {
+	#station-panel {
+		gap: 8px;
+		padding: 10px 12px;
+	}
+	.tab {
+		padding: 4px 2px;
+	}
+	.tab .em {
+		font-size: 16px;
+		margin-bottom: 0;
+	}
+	.group {
+		padding: 8px 10px;
+		gap: 8px;
+	}
+	.opt button {
+		height: 38px;
+	}
+	.name input {
+		padding: 5px 10px;
+	}
+	.dice {
+		width: 38px;
+		height: 38px;
+		font-size: 20px;
+	}
+	#station-go .big {
+		padding: 8px 10px;
+		font-size: 15px;
+	}
+}
+
+/* The sound button moves out of the panel's way here. */
+body.on-station #btn-mute {
+	right: auto;
+	left: calc(10px + var(--safe-left));
 }
 
 /* ---------- friends / lobby ---------- */
@@ -652,9 +788,6 @@ button {
 	.pc .pw {
 		font-size: 12px;
 		min-height: 14px;
-	}
-	#station-panel h2 {
-		display: none;
 	}
 }
 
@@ -949,4 +1082,12 @@ kbd {
 			0 5px 0 #1b6ea3,
 			0 0 0 8px rgba(92, 194, 255, 0.45);
 	}
+}
+
+.st-hint {
+	text-align: center;
+	font-weight: 700;
+	min-height: 30px;
+	line-height: 30px;
+	margin: 0;
 }

@@ -29,6 +29,7 @@ export const SCREENS = ['title', 'station', 'solo', 'friends', 'lobby', 'results
  */
 export function showScreen(name) {
 	for (const s of SCREENS) $(s).hidden = s !== name;
+	for (const s of [...SCREENS, 'game']) document.body.classList.toggle(`on-${s}`, s === name);
 	$('hud').hidden = name !== 'game';
 	document.body.classList.toggle('playing', name === 'game');
 }
@@ -52,14 +53,21 @@ export function button(text, onClick, cls = 'big primary') {
  * @property {string} label
  * @property {(i: number) => string} name
  * @property {(keyof Look)} [colorKey] Show colour swatches for this key below.
+ * @property {string} emoji
  */
 
 /** @type {StationRow[]} */
 const ROWS = [
-	{ key: 'species', label: 'Penguin', name: (i) => SPECIES[i]?.name ?? '' },
-	{ key: 'hat', label: 'Hat', name: (i) => HATS[i] ?? '', colorKey: 'hatColor' },
-	{ key: 'scarf', label: 'Neck', name: (i) => SCARVES[i] ?? '', colorKey: 'scarfColor' },
-	{ key: 'glasses', label: 'Eyes', name: (i) => GLASSES[i] ?? '' },
+	{ key: 'species', label: 'Penguin', emoji: '🐧', name: (i) => SPECIES[i]?.name ?? '' },
+	{ key: 'hat', label: 'Hat', emoji: '🎩', name: (i) => HATS[i] ?? '', colorKey: 'hatColor' },
+	{
+		key: 'scarf',
+		label: 'Neck',
+		emoji: '🧣',
+		name: (i) => SCARVES[i] ?? '',
+		colorKey: 'scarfColor',
+	},
+	{ key: 'glasses', label: 'Eyes', emoji: '🕶️', name: (i) => GLASSES[i] ?? '' },
 ];
 
 /**
@@ -71,44 +79,78 @@ const ROWS = [
 export function renderStation(look, onChange) {
 	const host = $('station-rows');
 	host.innerHTML = '';
+	// Tabs: one option card at a time, so it's never cramped.
+	const tabs = document.createElement('div');
+	tabs.className = 'tabs';
+	tabs.setAttribute('role', 'tablist');
 	for (const row of ROWS) {
-		const div = document.createElement('div');
-		div.className = 'opt';
-		const lbl = document.createElement('span');
-		lbl.className = 'lbl';
-		lbl.textContent = row.label;
-		const val = document.createElement('span');
-		val.className = 'val';
-		val.textContent = row.name(look[row.key]);
-		const n = LOOK_COUNTS[row.key];
-		const step = (/** @type {number} */ d) => () => {
-			onChange({ ...look, [row.key]: (look[row.key] + d + n) % n });
-		};
-		const prev = button('◀', step(-1), '');
-		prev.setAttribute('aria-label', `Previous ${row.label}`);
-		const next = button('▶', step(1), '');
-		next.setAttribute('aria-label', `Next ${row.label}`);
-		next.dataset['row'] = row.key;
-		div.append(lbl, prev, val, next);
-		host.append(div);
-		const ck = row.colorKey;
-		if (ck && look[row.key] !== 0) {
-			const sw = document.createElement('div');
-			sw.className = 'swatches';
-			COLORS.forEach((c, i) => {
-				const b = button(
-					'',
-					() => onChange({ ...look, [ck]: i }),
-					`swatch${look[ck] === i ? ' on' : ''}`,
-				);
-				b.style.background = `#${c.hex.toString(16).padStart(6, '0')}`;
-				b.setAttribute('aria-label', c.name);
-				sw.append(b);
-			});
-			host.append(sw);
-		}
+		const t = button(
+			`<span class="em">${row.emoji}</span>${row.label}`,
+			() => {
+				stationTab = row.key;
+				renderStation(look, onChange);
+			},
+			`tab${stationTab === row.key ? ' on' : ''}`,
+		);
+		t.dataset['tab'] = row.key;
+		t.setAttribute('role', 'tab');
+		t.setAttribute('aria-selected', String(stationTab === row.key));
+		tabs.append(t);
 	}
+	host.append(tabs);
+	const row = ROWS.find((r) => r.key === stationTab) ?? ROWS[0];
+	if (!row) return;
+	const group = document.createElement('div');
+	group.className = 'group';
+	const div = document.createElement('div');
+	div.className = 'opt';
+	const val = document.createElement('span');
+	val.className = 'val';
+	val.textContent = row.name(look[row.key]);
+	const n = LOOK_COUNTS[row.key];
+	const step = (/** @type {number} */ d) => () => {
+		onChange({ ...look, [row.key]: (look[row.key] + d + n) % n });
+	};
+	const prev = button('◀', step(-1), '');
+	prev.setAttribute('aria-label', `Previous ${row.label}`);
+	const next = button('▶', step(1), '');
+	next.setAttribute('aria-label', `Next ${row.label}`);
+	next.dataset['row'] = row.key;
+	div.append(prev, val, next);
+	group.append(div);
+	const ck = row.colorKey;
+	if (ck) {
+		const sw = document.createElement('div');
+		sw.className = 'swatches';
+		const off = look[row.key] === 0;
+		COLORS.forEach((c, i) => {
+			const b = button(
+				'',
+				() => onChange({ ...look, [ck]: i }),
+				`swatch${look[ck] === i ? ' on' : ''}`,
+			);
+			b.style.background = `#${c.hex.toString(16).padStart(6, '0')}`;
+			b.setAttribute('aria-label', c.name);
+			b.disabled = off;
+			sw.append(b);
+		});
+		// Keep the card the same height whether or not colours apply.
+		sw.classList.toggle('off', off);
+		group.append(sw);
+	} else {
+		// No colours for this one: a short hint instead of an empty gap.
+		const hint = document.createElement('div');
+		hint.className = 'hint st-hint';
+		hint.textContent =
+			row.key === 'species' ? 'Pick your kind of penguin' : 'Pick some eyewear';
+		group.append(hint);
+	}
+	host.append(group);
 }
+
+/** Which changing-station tab is open. */
+/** @type {keyof Look} */
+let stationTab = 'species';
 
 /**
  * Map + bot-count pickers (solo setup and the lobby).
