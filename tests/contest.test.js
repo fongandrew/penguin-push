@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 
-import { jarAt, makeArena } from '../public/src/arena.js';
+import { downhillAt, jarAt, makeArena } from '../public/src/arena.js';
 import { BALL_GONE_MS, BALL_RESPAWN_MS } from '../public/src/constants.js';
 import {
 	applyClaim,
@@ -33,10 +33,18 @@ describe('contested claims', () => {
 	it('lets one penguin shove a resting giant snowball, then it respawns', () => {
 		const a = makeArena('hill', 2);
 		const c = freshContest(a.balls.length);
+		const home = a.balls[0];
+		const down = home && downhillAt(a, home.x, home.y);
+		if (!down) throw new Error('ball should sit on a slope');
+		const angle = Math.atan2(down.y, down.x);
 		expect(ballAt(a, c, 0, 500).kind).toBe('rest');
-		expect(applyClaim(c, a, { type: 'kick', ball: 0, angle: 2, by: 0, t: 1000 })).toBe(true);
+		// Shoving it uphill does nothing: snowballs only go downhill.
+		expect(
+			applyClaim(c, a, { type: 'kick', ball: 0, angle: angle + Math.PI, by: 0, t: 900 }),
+		).toBe(false);
+		expect(applyClaim(c, a, { type: 'kick', ball: 0, angle, by: 0, t: 1000 })).toBe(true);
 		// A second shove a moment later loses: the ball is already rolling.
-		expect(applyClaim(c, a, { type: 'kick', ball: 0, angle: 1, by: 1, t: 1050 })).toBe(false);
+		expect(applyClaim(c, a, { type: 'kick', ball: 0, angle, by: 1, t: 1050 })).toBe(false);
 		expect(ballAt(a, c, 0, 1500).kind).toBe('roll');
 		const kick = c.kicks[0]?.[0];
 		if (!kick) throw new Error('no kick');

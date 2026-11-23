@@ -12,7 +12,17 @@
  */
 
 import { botInput } from './ai.js';
-import { jarAt, jarIndicesAround, makeArena, shelteredFrom, startSpots, waveAt } from './arena.js';
+import {
+	capDist,
+	jarAt,
+	jarIndicesAround,
+	kickAllowed,
+	makeArena,
+	shelteredFrom,
+	startSpots,
+	wallsAt,
+	waveAt,
+} from './arena.js';
 import {
 	BALL_HIT,
 	BALL_R,
@@ -386,13 +396,10 @@ function giantSnowballs(state, link, p, t) {
 			if (d > BALL_R + PENGUIN_R + 0.12) return;
 			const toward = (p.vx * dx + p.vy * dy) / (d || 1);
 			if (toward < 0.6 && p.slideMs <= 0 && !(p.shoveMs > SHOVE_ANIM_MS - 20)) return;
-			link.claim({
-				type: 'kick',
-				ball: i,
-				angle: Math.atan2(dy, dx),
-				by: p.id,
-				t: Math.round(t),
-			});
+			const angle = Math.atan2(dy, dx);
+			// Snowballs only go downhill: shoving from below does nothing.
+			if (!kickAllowed(arena, i, angle)) return;
+			link.claim({ type: 'kick', ball: i, angle, by: p.id, t: Math.round(t) });
 			return;
 		}
 		if (b.kind !== 'roll') return;
@@ -433,7 +440,7 @@ function waves(state, p, t) {
 	const along = p.x * Math.cos(w.dir) + p.y * Math.sin(w.dir);
 	if (w.front < along) return;
 	p.hitBy.add(key);
-	if (shelteredFrom(arena, w.dir, p.x, p.y)) return;
+	if (shelteredFrom(arena, w.dir, p.x, p.y, t)) return;
 	if (knock(p, Math.cos(w.dir) * WAVE_PUSH, Math.sin(w.dir) * WAVE_PUSH, 0)) {
 		state.fx.push({ kind: 'splash', x: p.x, y: p.y, pid: p.id, z: 1 });
 	}
@@ -549,7 +556,11 @@ function stepThrows(state, link, t) {
 			state.fx.push({ kind: 'poof', x: pos.x, y: pos.y, z: 0.2 });
 			continue;
 		}
-		if (arena?.obstacles.some((o) => Math.hypot(pos.x - o.x, pos.y - o.y) < o.r)) {
+		if (
+			arena?.obstacles.some((o) => Math.hypot(pos.x - o.x, pos.y - o.y) < o.r) ||
+			(pos.z < 1.1 &&
+				(arena ? wallsAt(arena, t) : []).some((w) => capDist(w, pos.x, pos.y).d < 0.1))
+		) {
 			th.dead = true;
 			state.fx.push({ kind: 'poof', x: pos.x, y: pos.y, z: pos.z });
 			continue;

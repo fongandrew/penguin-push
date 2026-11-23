@@ -77,6 +77,8 @@ export const JAR_R = 0.55;
 export const SHRINK_START_MS = 90000;
 export const SHRINK_END_MS = 150000;
 export const SHRINK_MIN = 0.16;
+/** Snow walls crumble a little after sudden death starts (no hiding forever). */
+export const WALLS_CRUMBLE_MS = SHRINK_START_MS + 8000;
 
 /** Pre-match countdown. */
 export const COUNTDOWN_MS = 3200;

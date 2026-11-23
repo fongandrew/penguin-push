@@ -17,6 +17,7 @@ import {
 	SHRINK_END_MS,
 	SHRINK_MIN,
 	SHRINK_START_MS,
+	WALLS_CRUMBLE_MS,
 } from './constants.js';
 import { makeRng, streamFor } from './net/rng.js';
 
@@ -46,7 +47,13 @@ export const MAPS = [
 		id: 'cove',
 		name: 'Igloo Cove',
 		emoji: '🌊',
-		blurb: 'Big waves! Hide behind the igloo.',
+		blurb: 'Big waves! Hide behind the igloo or a snow wall.',
+	},
+	{
+		id: 'maze',
+		name: 'Ice Maze',
+		emoji: '🧩',
+		blurb: 'Snow-wall corridors with holes in the ice.',
 	},
 ];
 
@@ -61,11 +68,19 @@ export const MAPS = [
  * @property {number} y
  * @property {number} r
  *
+ * @typedef {object} Capsule A line segment with thickness (a circle when a = b).
+ * @property {number} ax
+ * @property {number} ay
+ * @property {number} bx
+ * @property {number} by
+ * @property {number} r
+ *
  * @typedef {object} Hill
  * @property {number} x
  * @property {number} y
  * @property {number} h Peak height.
- * @property {number} s Spread (gaussian sigma).
+ * @property {number} s Spread north–south (gaussian sigma).
+ * @property {number} sx Spread east–west (a long ridge when larger).
  *
  * @typedef {object} Floe
  * @property {number} orbit Orbit radius around the island centre.
@@ -90,7 +105,9 @@ export const MAPS = [
  * @property {Hill | null} hill
  * @property {Circle[]} balls Giant snowball home spots.
  * @property {Floe[]} floes
- * @property {Circle[]} obstacles Solid things (igloo, rocks).
+ * @property {Circle[]} obstacles Solid round things (igloo, rocks).
+ * @property {Capsule[]} walls Snow walls: solid, block snowballs, shelter from waves.
+ * @property {Capsule[]} holes Holes and cracks in the ice: water.
  * @property {Circle | null} igloo
  * @property {Circle[]} slick Extra-slippery patches.
  * @property {Waves | null} waves
@@ -120,6 +137,8 @@ export function makeArena(id, seed) {
 		balls: [],
 		floes: [],
 		obstacles: [],
+		walls: [],
+		holes: [],
 		igloo: null,
 		slick: [],
 		waves: null,
@@ -127,40 +146,272 @@ export function makeArena(id, seed) {
 	};
 
 	if (id === 'hill') {
-		arena.R = 8.6;
-		const hx = (rng() - 0.5) * 1.5;
-		arena.hill = { x: hx, y: -2.5, h: 2.4, s: 2.2 };
+		// One big hill to the north. Two snowballs sit just below its crest,
+		// each in a lane between snow walls, aimed at the holes and the shore
+		// below. They only roll downhill.
+		arena.R = 9;
+		const hx = (rng() - 0.5) * 0.8;
+		arena.hill = { x: hx, y: -3.7, h: 3.0, s: 2.2, sx: 5.5 };
 		arena.balls = [
-			{ x: hx - 1.05, y: -2.75, r: BALL_R },
-			{ x: hx + 1.05, y: -2.75, r: BALL_R },
+			{ x: hx - 1.75, y: -2.55, r: BALL_R },
+			{ x: hx + 1.75, y: -2.55, r: BALL_R },
+		];
+		arena.walls = [
+			wall(hx, -2.3, hx, 1.3, 0.3),
+			wall(hx - 3.7, -3.0, hx - 3.3, 1.0, 0.3),
+			wall(hx + 3.7, -3.0, hx + 3.3, 1.0, 0.3),
+		];
+		arena.holes = [
+			wall(-2.1 + rng() * 0.6, 4.3, -2.1 + rng() * 0.6, 4.3, 1.0),
+			wall(2.3 - rng() * 0.6, 4.4, 2.3 - rng() * 0.6, 4.4, 0.9),
+			wall(-0.5, 2.9, 0.7, 3.2, 0.42),
+			wall(-5.6, -0.4, -5.6, -0.4, 0.7),
+			wall(5.7, -0.2, 5.7, -0.2, 0.7),
 		];
 	} else if (id === 'floes') {
-		arena.R = 6.0;
+		arena.R = 6.4;
 		const n = 4;
 		for (let i = 0; i < n; i++) {
 			const shape = [];
 			for (let j = 0; j < 9; j++) shape.push(0.85 + rng() * 0.25);
 			arena.floes.push({
-				orbit: 7.35,
+				orbit: 7.8,
 				speed: 0.15,
 				phase: (i / n) * Math.PI * 2 + rng() * 0.3,
-				r: 1.95,
+				r: 2.0,
 				offset: i * 3400 + Math.floor(rng() * 900),
 				shape,
 			});
 		}
-		arena.slick.push({ x: 0, y: 0, r: 1.6 });
-	} else {
-		arena.R = 8.3;
+		arena.slick.push({ x: 0, y: 0, r: 1.4 });
+		// Fishing holes, and a crack across the middle.
+		const a0 = rng() * Math.PI * 2;
+		for (let i = 0; i < 3; i++) {
+			const a = a0 + (i / 3) * Math.PI * 2;
+			const x = Math.cos(a) * 3.5;
+			const y = Math.sin(a) * 3.5;
+			arena.holes.push(wall(x, y, x, y, 0.72));
+		}
+		const c = a0 + Math.PI / 3;
+		arena.holes.push(
+			wall(Math.cos(c) * 1.9, Math.sin(c) * 1.9, Math.cos(c) * 3.0, Math.sin(c) * 3.0, 0.3),
+		);
+	} else if (id === 'cove') {
+		arena.R = 8.6;
 		arena.igloo = { x: 2.4, y: -1.6, r: 1.45 };
-		arena.obstacles = [arena.igloo, { x: -3.4, y: 2.1, r: 0.55 }, { x: -0.7, y: -4.6, r: 0.5 }];
+		arena.obstacles = [arena.igloo, { x: -0.6, y: -5.0, r: 0.5 }];
+		arena.walls = [
+			wall(-4.6, -3.0, -2.5, -3.7, 0.3),
+			wall(-1.1, 2.7, 1.5, 3.5, 0.3),
+			wall(4.5, 1.4, 4.9, 3.4, 0.3),
+			wall(-5.0, 0.4, -4.4, 2.5, 0.3),
+		];
+		arena.holes = [
+			wall(-2.2, 0.0, -2.2, 0.0, 0.85),
+			wall(1.0, 5.4, 2.3, 5.2, 0.45),
+			wall(5.6, -1.6, 5.6, -1.6, 0.7),
+		];
 		arena.slick = [
-			{ x: -2.4, y: -1.6, r: 1.8 },
-			{ x: 2.4, y: 3.0, r: 1.5 },
+			{ x: -2.6, y: -2.0, r: 1.3 },
+			{ x: 1.4, y: 1.4, r: 1.2 },
 		];
 		arena.waves = { first: 9000, every: 8000, warn: 2600, travel: 2300, reach: 13 };
+	} else {
+		buildMaze(arena, rng);
 	}
 	return arena;
+}
+
+/**
+ * @param {number} ax
+ * @param {number} ay
+ * @param {number} bx
+ * @param {number} by
+ * @param {number} r
+ * @returns {Capsule}
+ */
+function wall(ax, ay, bx, by, r) {
+	return { ax, ay, bx, by, r };
+}
+
+const MAZE_CELL = 2.6;
+const MAZE_N = 7;
+
+/**
+ * Ice Maze: a seeded maze of snow walls (a random spanning tree, then extra
+ * gaps knocked through so there are always loops — nobody gets cornered for
+ * ever), with holes in the ice in some of the dead ends.
+ *
+ * @param {Arena} arena
+ * @param {() => number} rng
+ */
+function buildMaze(arena, rng) {
+	arena.R = 9.6;
+	const n = MAZE_N;
+	const c = MAZE_CELL;
+	const at = (/** @type {number} */ i) => (i - (n - 1) / 2) * c;
+	// Walls between cells: right[i][j] separates (i,j)/(i+1,j); down[i][j] (i,j)/(i,j+1).
+	const right = Array.from({ length: n }, () => Array(n).fill(true));
+	const down = Array.from({ length: n }, () => Array(n).fill(true));
+	const seen = Array.from({ length: n }, () => Array(n).fill(false));
+	/** @type {[number, number][]} */
+	const stack = [[(n - 1) / 2, (n - 1) / 2]];
+	/** @type {boolean[]} */ (seen[(n - 1) / 2])[(n - 1) / 2] = true;
+	while (stack.length) {
+		const top = stack[stack.length - 1];
+		if (!top) break;
+		const [i, j] = top;
+		/** @type {[number, number][]} */
+		const next = [];
+		for (const [di, dj] of [
+			[1, 0],
+			[-1, 0],
+			[0, 1],
+			[0, -1],
+		]) {
+			const ni = i + (di ?? 0);
+			const nj = j + (dj ?? 0);
+			if (ni >= 0 && nj >= 0 && ni < n && nj < n && !seen[ni]?.[nj]) next.push([ni, nj]);
+		}
+		if (!next.length) {
+			stack.pop();
+			continue;
+		}
+		const pick = next[Math.floor(rng() * next.length)];
+		if (!pick) break;
+		const [ni, nj] = pick;
+		if (ni !== i) /** @type {boolean[]} */ (right[Math.min(i, ni)])[j] = false;
+		else /** @type {boolean[]} */ (down[i])[Math.min(j, nj)] = false;
+		/** @type {boolean[]} */ (seen[ni])[nj] = true;
+		stack.push([ni, nj]);
+	}
+	// Knock extra gaps through: loops make for chases, not traps.
+	for (let i = 0; i < n; i++) {
+		for (let j = 0; j < n; j++) {
+			if (rng() < 0.42) /** @type {boolean[]} */ (right[i])[j] = false;
+			if (rng() < 0.42) /** @type {boolean[]} */ (down[i])[j] = false;
+		}
+	}
+	const inside = (/** @type {number} */ x, /** @type {number} */ y) =>
+		Math.hypot(x, y) < edgeRadius(arena, Math.atan2(y, x)) * 0.86;
+	const centre = (n - 1) / 2;
+	for (let i = 0; i < n - 1; i++) {
+		for (let j = 0; j < n; j++) {
+			if (!right[i]?.[j]) continue;
+			const x = at(i) + c / 2;
+			const y0 = at(j) - c / 2;
+			const y1 = at(j) + c / 2;
+			if (inside(x, y0) && inside(x, y1)) arena.walls.push(wall(x, y0, x, y1, 0.26));
+		}
+	}
+	for (let i = 0; i < n; i++) {
+		for (let j = 0; j < n - 1; j++) {
+			if (!down[i]?.[j]) continue;
+			const y = at(j) + c / 2;
+			const x0 = at(i) - c / 2;
+			const x1 = at(i) + c / 2;
+			if (inside(x0, y) && inside(x1, y)) arena.walls.push(wall(x0, y, x1, y, 0.26));
+		}
+	}
+	// Holes: in cells boxed in on three sides first (dead ends), never the
+	// middle (that's where penguins drop back in).
+	/** @type {{ i: number, j: number, sides: number, r: number }[]} */
+	const cells = [];
+	for (let i = 0; i < n; i++) {
+		for (let j = 0; j < n; j++) {
+			if (Math.abs(i - centre) <= 1 && Math.abs(j - centre) <= 1) continue;
+			if (!inside(at(i), at(j))) continue;
+			const sides =
+				(i > 0 && right[i - 1]?.[j] ? 1 : 0) +
+				(i < n - 1 && right[i]?.[j] ? 1 : 0) +
+				(j > 0 && down[i]?.[j - 1] ? 1 : 0) +
+				(j < n - 1 && down[i]?.[j] ? 1 : 0);
+			cells.push({ i, j, sides, r: rng() });
+		}
+	}
+	cells.sort((a, b) => b.sides - a.sides || a.r - b.r);
+	for (const cell of cells.slice(0, 6)) {
+		const x = at(cell.i) + (rng() - 0.5) * 0.5;
+		const y = at(cell.j) + (rng() - 0.5) * 0.5;
+		arena.holes.push(wall(x, y, x, y, 0.72 + rng() * 0.15));
+	}
+}
+
+/**
+ * The snow walls still standing at time `t` (they crumble in sudden death).
+ *
+ * @param {Arena} arena
+ * @param {number} t
+ * @returns {Capsule[]}
+ */
+export function wallsAt(arena, t) {
+	return t < WALLS_CRUMBLE_MS ? arena.walls : [];
+}
+
+/**
+ * Distance from a point to a capsule's surface (negative = inside), plus the
+ * outward normal there.
+ *
+ * @param {Capsule} c
+ * @param {number} x
+ * @param {number} y
+ * @returns {{ d: number, nx: number, ny: number, px: number, py: number }}
+ */
+export function capDist(c, x, y) {
+	const dx = c.bx - c.ax;
+	const dy = c.by - c.ay;
+	const len2 = dx * dx + dy * dy;
+	const u = len2 > 0 ? Math.max(0, Math.min(1, ((x - c.ax) * dx + (y - c.ay) * dy) / len2)) : 0;
+	const px = c.ax + dx * u;
+	const py = c.ay + dy * u;
+	const ex = x - px;
+	const ey = y - py;
+	const e = Math.hypot(ex, ey);
+	if (e < 1e-6) {
+		// Exactly on the spine: push out sideways.
+		const l = Math.sqrt(len2) || 1;
+		return { d: -c.r, nx: -dy / l || 1, ny: dx / l, px, py };
+	}
+	return { d: e - c.r, nx: ex / e, ny: ey / e, px, py };
+}
+
+/**
+ * @param {Arena} arena
+ * @param {number} x
+ * @param {number} y
+ * @param {number} [pad]
+ */
+export function inHole(arena, x, y, pad = 0) {
+	return arena.holes.some((h) => capDist(h, x, y).d < pad);
+}
+
+/**
+ * Downhill direction at a point (unit vector), or null on the flat.
+ *
+ * @param {Arena} arena
+ * @param {number} x
+ * @param {number} y
+ */
+export function downhillAt(arena, x, y) {
+	const g = gradientAt(arena, x, y);
+	const m = Math.hypot(g.x, g.y);
+	if (m < 0.05) return null;
+	return { x: -g.x / m, y: -g.y / m };
+}
+
+/**
+ * Giant snowballs only go downhill: a shove has to come from the uphill side.
+ *
+ * @param {Arena} arena
+ * @param {number} ball
+ * @param {number} angle Direction of the shove.
+ */
+export function kickAllowed(arena, ball, angle) {
+	const home = arena.balls[ball];
+	if (!home) return false;
+	const down = downhillAt(arena, home.x, home.y);
+	if (!down) return true;
+	return Math.cos(angle) * down.x + Math.sin(angle) * down.y > 0.35;
 }
 
 /**
@@ -209,7 +460,7 @@ export function heightAt(arena, x, y) {
 	if (!h) return 0;
 	const dx = x - h.x;
 	const dy = y - h.y;
-	return h.h * Math.exp(-(dx * dx + dy * dy) / (2 * h.s * h.s));
+	return h.h * Math.exp(-((dx * dx) / (h.sx * h.sx) + (dy * dy) / (h.s * h.s)) / 2);
 }
 
 /**
@@ -224,8 +475,7 @@ export function gradientAt(arena, x, y) {
 	const h = arena.hill;
 	if (!h) return { x: 0, y: 0 };
 	const z = heightAt(arena, x, y);
-	const k = -z / (h.s * h.s);
-	return { x: k * (x - h.x), y: k * (y - h.y) };
+	return { x: (-z * (x - h.x)) / (h.sx * h.sx), y: (-z * (y - h.y)) / (h.s * h.s) };
 }
 
 /**
@@ -285,7 +535,7 @@ export function floeAt(f, t) {
  */
 export function supportAt(arena, x, y, t) {
 	const slick = arena.slick.some((c) => (x - c.x) ** 2 + (y - c.y) ** 2 < c.r * c.r);
-	if (onIsland(arena, x, y, t)) return { ok: true, vx: 0, vy: 0, slick };
+	if (onIsland(arena, x, y, t) && !inHole(arena, x, y)) return { ok: true, vx: 0, vy: 0, slick };
 	for (const f of arena.floes) {
 		const st = floeAt(f, t);
 		if (st.sink > 0.45) continue;
@@ -326,21 +576,25 @@ export function waveAt(arena, t) {
 }
 
 /**
- * True when the igloo stands between a wave and the point (x, y).
+ * True when the igloo, a rock or a snow wall stands between a wave and the
+ * point (x, y) — i.e. something solid just upwave of it.
  *
  * @param {Arena} arena
  * @param {number} dir
  * @param {number} x
  * @param {number} y
+ * @param {number} t
  */
-export function shelteredFrom(arena, dir, x, y) {
-	const ig = arena.igloo;
-	if (!ig) return false;
+export function shelteredFrom(arena, dir, x, y, t) {
 	const ux = Math.cos(dir);
 	const uy = Math.sin(dir);
-	const along = (x - ig.x) * ux + (y - ig.y) * uy;
-	const side = Math.abs(-(x - ig.x) * uy + (y - ig.y) * ux);
-	return along > 0 && along < 4.5 && side < ig.r * 0.95;
+	for (let s = 0.3; s <= 3.6; s += 0.25) {
+		const px = x - ux * s;
+		const py = y - uy * s;
+		if (arena.obstacles.some((o) => (px - o.x) ** 2 + (py - o.y) ** 2 < o.r * o.r)) return true;
+		if (wallsAt(arena, t).some((w) => capDist(w, px, py).d < 0.05)) return true;
+	}
+	return false;
 }
 
 /**
@@ -374,7 +628,7 @@ export function jarAt(arena, i) {
 		const d = Math.sqrt(rng()) * 0.72;
 		x = Math.cos(a) * d * edgeRadius(arena, a) * shrinkAt(spawn + 4000);
 		y = Math.sin(a) * d * edgeRadius(arena, a) * shrinkAt(spawn + 4000);
-		if (!blocked(arena, x, y, 0.7)) break;
+		if (!blocked(arena, x, y, 0.7) && onIsland(arena, x, y, spawn)) break;
 	}
 	const roll = rng();
 	const p = rng();
@@ -385,7 +639,7 @@ export function jarAt(arena, i) {
 		y,
 		spawn,
 		expire: spawn + JAR_LIFE_MS,
-		kind: roll < 0.3 ? 'heart' : 'fish',
+		kind: roll < 0.3 && spawn < SHRINK_START_MS ? 'heart' : 'fish',
 		power: p < 0.45 ? 'snowball' : p < 0.75 ? 'slide' : 'mega',
 	};
 	arena.jarCache.set(i, jar);
@@ -419,6 +673,8 @@ export function blocked(arena, x, y, pad) {
 	for (const o of [...arena.obstacles, ...arena.balls]) {
 		if ((x - o.x) ** 2 + (y - o.y) ** 2 < (o.r + pad) ** 2) return true;
 	}
+	if (arena.walls.some((w) => capDist(w, x, y).d < pad)) return true;
+	if (inHole(arena, x, y, pad)) return true;
 	return heightAt(arena, x, y) > 1.2;
 }
 
@@ -432,17 +688,21 @@ export function blocked(arena, x, y, pad) {
 export function startSpots(arena, n) {
 	const out = [];
 	for (let i = 0; i < n; i++) {
-		let a = Math.PI / 4 + (i / n) * Math.PI * 2;
-		let x = 0;
-		let y = 0;
-		for (let tries = 0; tries < 12; tries++) {
-			const r = edgeRadius(arena, a) * (arena.floes.length ? 0.5 : 0.52);
-			x = Math.cos(a) * r;
-			y = Math.sin(a) * r;
-			if (!blocked(arena, x, y, 0.6)) break;
-			a += 0.35;
+		const base = Math.PI / 4 + (i / n) * Math.PI * 2;
+		let best = { x: 0, y: 0 };
+		search: for (const f of [0.5, 0.42, 0.58, 0.34, 0.66, 0.26]) {
+			for (const da of [0, 0.25, -0.25, 0.5, -0.5, 0.8, -0.8]) {
+				const a = base + da;
+				const r = edgeRadius(arena, a) * f;
+				const x = Math.cos(a) * r;
+				const y = Math.sin(a) * r;
+				if (supportAt(arena, x, y, 0).ok && !blocked(arena, x, y, 0.65)) {
+					best = { x, y };
+					break search;
+				}
+			}
 		}
-		out.push({ x, y, face: Math.atan2(-y, -x) });
+		out.push({ ...best, face: Math.atan2(-best.y, -best.x) });
 	}
 	return out;
 }
@@ -525,9 +785,21 @@ export function rollPath(arena, ball, angle, t0) {
 		vy *= 1 - BALL_DRAG * dt;
 		x += vx * dt;
 		y += vy * dt;
+		for (const w of wallsAt(arena, t0 + ms)) {
+			const c = capDist(w, x, y);
+			if (c.d >= BALL_R) continue;
+			// Bounce off snow walls (they funnel the ball down its lane).
+			x += c.nx * (BALL_R - c.d);
+			y += c.ny * (BALL_R - c.d);
+			const vn = vx * c.nx + vy * c.ny;
+			if (vn < 0) {
+				vx -= 1.6 * vn * c.nx;
+				vy -= 1.6 * vn * c.ny;
+			}
+		}
 		ms += 1000 / 60;
 		pts.push(x, y);
-		if (!onIsland(arena, x, y, t0 + ms)) {
+		if (!onIsland(arena, x, y, t0 + ms) || inHole(arena, x, y)) {
 			end = 'splash';
 			break;
 		}

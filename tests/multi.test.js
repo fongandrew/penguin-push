@@ -193,11 +193,20 @@ describe('two players through a relay', () => {
 		expect(
 			Math.hypot((benA?.x ?? 0) - (benB?.x ?? 9), (benA?.y ?? 0) - (benB?.y ?? 9)),
 		).toBeLessThan(0.5);
+	});
 
-		// Both grab the same jar "at once": relay order decides, both agree.
+	it('agree on who got a jar when both grab it at once', () => {
+		const relay = new FakeRelay();
+		const a = relay.join(0, 'Ana');
+		const b = relay.join(1, 'Ben');
+		relay.flush();
+		a.setSettings({ map: 'cove', bots: 0 });
+		a.startNextMatch();
+		relay.flush();
 		const arena = a.state.arena;
 		if (!arena) throw new Error('arena');
-		relay.advance(4000);
+		// Both grab the same jar "at once": relay order decides, both agree.
+		relay.advance(8000);
 		const t = Math.round(a.matchTime());
 		let i = 0;
 		while (!jarAvailable(arena, a.confirmed, i, t) && i < 10) i++;

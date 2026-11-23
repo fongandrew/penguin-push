@@ -3,7 +3,7 @@
  * the fall-in / drop-back-in cycle. Pure apart from mutating the penguin.
  */
 
-import { floeAt, gradientAt, heightAt, respawnSpot, supportAt } from './arena.js';
+import { capDist, floeAt, gradientAt, heightAt, respawnSpot, supportAt, wallsAt } from './arena.js';
 import {
 	FALL_MS,
 	ICE_DRAG,
@@ -156,6 +156,20 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 				p.vy -= 1.4 * vn * ny;
 			}
 		}
+	}
+
+	for (const w of wallsAt(arena, t)) {
+		const c = capDist(w, p.x, p.y);
+		if (c.d >= PENGUIN_R) continue;
+		p.x += c.nx * (PENGUIN_R - c.d);
+		p.y += c.ny * (PENGUIN_R - c.d);
+		const vn = p.vx * c.nx + p.vy * c.ny;
+		if (vn < 0) {
+			// Thud into the snow: a little bounce, mostly stop.
+			p.vx -= 1.3 * vn * c.nx;
+			p.vy -= 1.3 * vn * c.ny;
+		}
+		if (p.slideMs > 0) p.slideMs = 0;
 	}
 
 	p.z = heightAt(arena, p.x, p.y);

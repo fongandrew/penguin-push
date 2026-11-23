@@ -4,9 +4,11 @@ Waddle. Shove. **Splash!** A cute 3D penguin party game for phones: push the
 other penguins into the sea. Last penguin standing wins. Up to 4 players,
 online or against computer penguins, and the wins add up across a session.
 
-| Changing station | Snowball Hill | Leaderboard |
-| --- | --- | --- |
-| ![](docs/screenshots/station.png) | ![](docs/screenshots/snowball-hill.png) | ![](docs/screenshots/leaderboard.png) |
+| Changing station | Snowball Hill | Ice Maze | Leaderboard |
+| --- | --- | --- | --- |
+| ![](docs/screenshots/station.png) | ![](docs/screenshots/snowball-hill.png) | ![](docs/screenshots/ice-maze.png) | ![](docs/screenshots/leaderboard.png) |
+
+![Ice Maze: snow-wall corridors with holes in the ice](docs/screenshots/ice-maze-landscape.png)
 
 ![Igloo Cove: a wave is coming, so the computer penguins hide behind the igloo](docs/screenshots/igloo-cove-wave.png)
 
@@ -24,10 +26,15 @@ online or against computer penguins, and the wins add up across a session.
 
 ### Maps
 
-- ⛄ **Snowball Hill**: walk into a giant snowball on the hilltop to send it rolling down. It bowls over anyone in its path.
-- 🧊 **Floe Frenzy**: a small iceberg ringed by drifting ice floes that carry you around. They crack and sink now and then.
-- 🌊 **Igloo Cove**: red arrows warn of a big wave. It shoves everyone across the ice unless you hide behind the igloo. There are slippery patches too.
+Every map has **holes in the ice** to shove people into, and most have **snow walls**. You can't walk through walls, and they stop low snowballs (a long throw arcs over). Walls also block waves, and they bounce giant snowballs.
+
+- ⛄ **Snowball Hill**: two giant snowballs sit on a ridge, each at the top of a lane between snow walls. Snowballs **only roll downhill**: you have to get behind one (uphill) and push. Pushing from below does nothing. Arrows on the snow show which way each one will go. It rolls down its lane, bowls over anyone in it, and drops into the holes and crack at the bottom. Then it respawns at the top.
+- 🧊 **Floe Frenzy**: a small iceberg with fishing holes and a crack, ringed by drifting floes that carry you around. The floes crack and sink now and then.
+- 🌊 **Igloo Cove**: red arrows warn of a big wave. It shoves everyone across the ice unless you hide behind the igloo, a rock or a snow wall. It also has holes and shiny slippery patches.
+- 🧩 **Ice Maze**: a maze of snow walls, different every match. Extra gaps make loops, so you're never cornered for good. The dead ends have holes in them.
 - 🔀 **Mix it up**: a different map each round.
+
+In sudden death the snow walls crumble, so nobody can hide behind one forever. Heart jars also stop appearing.
 
 ### Changing station
 
@@ -79,9 +86,9 @@ How the game maps onto netplay's three state categories (`public/src/multi.js`):
 
 | File | What |
 | --- | --- |
-| `arena.js` | maps, seed-derived geometry/hazards/jars, giant-snowball roll sim |
+| `arena.js` | maps (holes and walls as capsules, seeded maze), seed-derived hazards and jars, the downhill-only snowball rule and roll sim |
 | `physics.js` / `game.js` | ice movement, shoves, bumps, powers, falls, match end, tally |
-| `ai.js` | computer penguins |
+| `ai.js` / `nav.js` | computer penguins / grid route-finding around walls and holes |
 | `contest.js` | contested-claim reducer |
 | `multi.js` / `solo.js` | online session (wire format, ownership, keyframes) / solo link |
 | `penguin3d.js` / `render.js` | penguin models + animation / the Three.js scene |

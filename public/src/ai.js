@@ -8,9 +8,19 @@
  * line up a giant snowball on whoever's downhill.
  */
 
-import { edginess, floeAt, jarAt, jarIndicesAround, shrinkAt, waveAt } from './arena.js';
+import {
+	capDist,
+	edginess,
+	floeAt,
+	jarAt,
+	jarIndicesAround,
+	shrinkAt,
+	wallsAt,
+	waveAt,
+} from './arena.js';
 import { BALL_R, PENGUIN_R, SHOVE_RANGE, SNOWBALL_RANGE } from './constants.js';
 import { ballAt, jarAvailable } from './contest.js';
+import { navFor, route, safeAhead } from './nav.js';
 import { angleDiff, floeUnder } from './physics.js';
 
 /** @typedef {import('./state.js').State} State */
@@ -118,13 +128,34 @@ export function botInput(state, p, t) {
 		wave &&
 		(wave.phase === 'warn' || wave.front < p.x * Math.cos(wave.dir) + p.y * Math.sin(wave.dir))
 	) {
-		// Get behind the igloo if there is one, else upwave of centre.
-		const ig = arena.igloo;
+		// Get behind the nearest igloo / rock / snow wall, else upwave of centre.
 		const ux = Math.cos(wave.dir);
 		const uy = Math.sin(wave.dir);
-		if (ig) {
-			gx = ig.x + ux * (ig.r + 0.7) - p.x;
-			gy = ig.y + uy * (ig.r + 0.7) - p.y;
+		/** @type {{ x: number, y: number }[]} */
+		const spots = [
+			...arena.obstacles.map((o) => ({
+				x: o.x + ux * (o.r + 0.6),
+				y: o.y + uy * (o.r + 0.6),
+			})),
+			...wallsAt(arena, t).map((w) => {
+				const mx = (w.ax + w.bx) / 2;
+				const my = (w.ay + w.by) / 2;
+				const c = capDist(w, mx + ux, my + uy);
+				return { x: c.px + c.nx * (w.r + 0.55), y: c.py + c.ny * (w.r + 0.55) };
+			}),
+		];
+		let best = null;
+		let bestD = Infinity;
+		for (const s of spots) {
+			const d = Math.hypot(s.x - p.x, s.y - p.y);
+			if (d < bestD && edginess(arena, s.x, s.y, t) < 0.8) {
+				bestD = d;
+				best = s;
+			}
+		}
+		if (best) {
+			gx = best.x - p.x;
+			gy = best.y - p.y;
 		} else {
 			gx = -ux * 2 - p.x;
 			gy = -uy * 2 - p.y;
@@ -216,6 +247,34 @@ export function botInput(state, p, t) {
 			} else {
 				gx = -p.x * 0.3 + Math.cos(brain.wobble) * 2;
 				gy = -p.y * 0.3 + Math.sin(brain.wobble * 0.7) * 2;
+			}
+		}
+	}
+
+	// Find a way around walls and holes rather than straight into them.
+	const nav = navFor(arena, t);
+	if (Math.hypot(gx, gy) > 0.05 && fi < 0) {
+		const wp = route(nav, p.x, p.y, p.x + gx, p.y + gy);
+		if (wp) {
+			const far = Math.hypot(gx, gy);
+			gx = wp.x - p.x;
+			gy = wp.y - p.y;
+			const near = Math.hypot(gx, gy) || 1;
+			// Keep the urgency of the original goal.
+			gx *= Math.max(1, Math.min(far, 3) / near);
+			gy *= Math.max(1, Math.min(far, 3) / near);
+		}
+		// Last-moment feelers: never step into a hole or off the edge.
+		if (!safeAhead(nav, p.x, p.y, gx, gy, 0.7)) {
+			const base = Math.atan2(gy, gx);
+			for (const da of [0.5, -0.5, 1, -1, 1.6, -1.6, 2.4, -2.4]) {
+				const ax = Math.cos(base + da);
+				const ay = Math.sin(base + da);
+				if (safeAhead(nav, p.x, p.y, ax, ay, 0.7)) {
+					gx = ax * Math.hypot(gx, gy);
+					gy = ay * Math.hypot(gx, gy);
+					break;
+				}
 			}
 		}
 	}

@@ -1,19 +1,31 @@
 import { describe, expect, it } from 'vitest';
 
 import {
+	capDist,
+	downhillAt,
 	edgeRadius,
 	floeAt,
+	heightAt,
+	inHole,
 	jarAt,
+	kickAllowed,
 	makeArena,
 	MAPS,
 	onIsland,
 	rollPath,
+	shelteredFrom,
 	shrinkAt,
 	startSpots,
 	supportAt,
+	wallsAt,
 	waveAt,
 } from '../public/src/arena.js';
-import { SHRINK_END_MS, SHRINK_MIN, SHRINK_START_MS } from '../public/src/constants.js';
+import {
+	SHRINK_END_MS,
+	SHRINK_MIN,
+	SHRINK_START_MS,
+	WALLS_CRUMBLE_MS,
+} from '../public/src/constants.js';
 
 describe('arena', () => {
 	it('is seed-derived: same seed, same island and jars', () => {
@@ -70,14 +82,66 @@ describe('arena', () => {
 		expect(Math.abs(go?.front ?? 99)).toBeLessThan(1);
 	});
 
-	it('rolls a giant snowball down the hill and into the sea', () => {
-		const a = makeArena('hill', 5);
-		const home = a.balls[0];
-		if (!home || !a.hill) throw new Error('no ball');
-		// Kick it away from the hilltop, toward the nearest shore.
-		const angle = Math.atan2(home.y - a.hill.y, home.x - a.hill.x);
-		const roll = rollPath(a, 0, angle, 1000);
-		expect(roll.end).toBe('splash');
-		expect(rollPath(a, 0, angle, 1000)).toBe(roll);
+	it('rolls a giant snowball down its lane into a hole or the sea', () => {
+		for (let seed = 1; seed < 12; seed++) {
+			const a = makeArena('hill', seed);
+			a.balls.forEach((home, i) => {
+				const down = downhillAt(a, home.x, home.y);
+				if (!down) throw new Error('ball should sit on a slope');
+				const angle = Math.atan2(down.y, down.x);
+				expect(kickAllowed(a, i, angle)).toBe(true);
+				expect(kickAllowed(a, i, angle + Math.PI)).toBe(false);
+				const roll = rollPath(a, i, angle, 1000);
+				// It ends further downhill than it started, and never inside a wall.
+				const n = roll.pts.length;
+				expect(heightAt(a, roll.pts[n - 2] ?? 0, roll.pts[n - 1] ?? 0)).toBeLessThan(
+					heightAt(a, home.x, home.y),
+				);
+				for (let k = 0; k < n; k += 2) {
+					for (const w of a.walls)
+						expect(
+							capDist(w, roll.pts[k] ?? 0, roll.pts[k + 1] ?? 0).d,
+						).toBeGreaterThan(-0.05);
+				}
+				expect(rollPath(a, i, angle, 1000)).toBe(roll);
+			});
+		}
+	});
+
+	it('makes holes water and walls solid', () => {
+		const a = makeArena('cove', 4);
+		const h = a.holes[0];
+		if (!h) throw new Error('no holes');
+		expect(supportAt(a, h.ax, h.ay, 0).ok).toBe(false);
+		expect(inHole(a, h.ax, h.ay)).toBe(true);
+		expect(a.walls.length).toBeGreaterThan(0);
+	});
+
+	it('builds the same maze from the same seed, with loops and holes', () => {
+		const a = makeArena('maze', 99);
+		const b = makeArena('maze', 99);
+		expect(a.walls).toEqual(b.walls);
+		expect(a.holes).toEqual(b.holes);
+		expect(a.walls.length).toBeGreaterThan(8);
+		expect(a.holes.length).toBeGreaterThanOrEqual(4);
+		expect(makeArena('maze', 100).walls).not.toEqual(a.walls);
+	});
+
+	it('lets you hide from a wave behind a snow wall, until the walls crumble', () => {
+		const a = makeArena('cove', 4);
+		const w = a.walls[0];
+		if (!w) throw new Error('no walls');
+		// Wave travelling along the wall's normal; stand just downwave of it.
+		const mx = (w.ax + w.bx) / 2;
+		const my = (w.ay + w.by) / 2;
+		const nx = -(w.by - w.ay);
+		const ny = w.bx - w.ax;
+		const l = Math.hypot(nx, ny);
+		const dir = Math.atan2(ny / l, nx / l);
+		const px = mx + (nx / l) * 0.9;
+		const py = my + (ny / l) * 0.9;
+		expect(shelteredFrom(a, dir, px, py, 1000)).toBe(true);
+		expect(wallsAt(a, WALLS_CRUMBLE_MS + 1)).toEqual([]);
+		expect(shelteredFrom(a, dir, px, py, WALLS_CRUMBLE_MS + 1)).toBe(false);
 	});
 });

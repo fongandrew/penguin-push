@@ -8,7 +8,7 @@
  * Solo play runs the same reducer directly.
  */
 
-import { jarAt, onIsland, rollPath } from './arena.js';
+import { jarAt, kickAllowed, onIsland, rollPath } from './arena.js';
 import { BALL_GONE_MS, BALL_RESPAWN_MS } from './constants.js';
 
 /** @typedef {import('./arena.js').Arena} Arena */
@@ -137,6 +137,7 @@ export function applyClaim(c, arena, claim) {
 	}
 	const kicks = c.kicks[claim.ball];
 	if (!kicks) return false;
+	if (!kickAllowed(arena, claim.ball, claim.angle)) return false;
 	if (ballAt(arena, c, claim.ball, claim.t).kind !== 'rest') return false;
 	// Keep kicks time-ordered even if a claim arrives a little late.
 	if (kicks.some((k) => k.t > claim.t)) return false;

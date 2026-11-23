@@ -1,13 +1,7 @@
 import { describe, expect, it } from 'vitest';
 
-import {
-	BALL_R,
-	FALL_MS,
-	PENGUIN_R,
-	RESPAWN_MS,
-	START_LIVES,
-	STEP,
-} from '../public/src/constants.js';
+import { downhillAt, rollPath } from '../public/src/arena.js';
+import { FALL_MS, RESPAWN_MS, START_LIVES, STEP } from '../public/src/constants.js';
 import { addThrow, onOut, tick } from '../public/src/game.js';
 import { SoloLink } from '../public/src/solo.js';
 import { IDLE, soloMatch } from './helpers.js';
@@ -97,22 +91,28 @@ describe('match rules', () => {
 		const me = s.penguins[0];
 		const home = arena?.balls[0];
 		if (!arena || !me || !home || !arena.hill) throw new Error('setup');
-		const angle = Math.atan2(home.y - arena.hill.y, home.x - arena.hill.x);
+		const down = downhillAt(arena, home.x, home.y);
+		if (!down) throw new Error('slope');
+		const angle = Math.atan2(down.y, down.x);
 		link.claim({ type: 'kick', ball: 0, angle, by: 1, t: 0 });
-		// Stand a little way down its path.
-		me.x = home.x + Math.cos(angle) * (BALL_R + PENGUIN_R + 1.5);
-		me.y = home.y + Math.sin(angle) * (BALL_R + PENGUIN_R + 1.5);
+		// Stand on its path, half a second down the lane.
+		const roll = rollPath(arena, 0, angle, 0);
+		me.x = roll.pts[60] ?? 0;
+		me.y = roll.pts[61] ?? 0;
 		const own = {
 			owns: (/** @type {number} */ pid) => pid === 0,
 			send: () => {},
 			claim: () => {},
 		};
+		const x0 = me.x;
+		const y0 = me.y;
 		run(s, own, 900);
-		expect(Math.hypot(me.vx, me.vy)).toBeGreaterThan(4);
+		expect([...me.hitBy].some((k) => k.startsWith('ball:0'))).toBe(true);
+		expect(Math.hypot(me.x - x0, me.y - y0)).toBeGreaterThan(1.5);
 	});
 
 	it('plays out a whole computer-only match on every map', () => {
-		for (const map of ['hill', 'floes', 'cove']) {
+		for (const map of ['hill', 'floes', 'cove', 'maze']) {
 			const s = soloMatch(map, 77);
 			const link = new SoloLink(s);
 			let guard = 0;
@@ -121,5 +121,33 @@ describe('match rules', () => {
 			expect(s.mode).toBe('done');
 			expect(s.result?.order).toHaveLength(4);
 		}
+	});
+});
+
+describe('walls and holes', () => {
+	it('stops you walking through a snow wall', () => {
+		const s = soloMatch('maze', 5, 0);
+		const link = onlyMe(s);
+		const me = s.penguins[0];
+		const w = s.arena?.walls.find((x) => x.ax === x.bx);
+		if (!me || !w) throw new Error('setup');
+		// Stand left of a vertical wall and walk right into it.
+		me.x = w.ax - 0.9;
+		me.y = (w.ay + w.by) / 2;
+		me.invulnMs = 1e9;
+		run(s, link, 1500, { ...IDLE, mx: 1 });
+		expect(me.x).toBeLessThan(w.ax);
+	});
+
+	it('drops you in a hole', () => {
+		const s = soloMatch('maze', 5, 0);
+		const link = onlyMe(s);
+		const me = s.penguins[0];
+		const h = s.arena?.holes[0];
+		if (!me || !h) throw new Error('setup');
+		me.x = h.ax;
+		me.y = h.ay;
+		run(s, link, 50);
+		expect(me.mode).toBe('fall');
 	});
 });
