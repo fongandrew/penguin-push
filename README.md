@@ -56,8 +56,19 @@ npm run dev:relay    # netplay relay on :8788, only needed for "Play with Friend
 ```bash
 npm run check        # lint + typecheck + net:check + unit tests + Playwright e2e
 npm run build        # dist/: minified, SW precache + version.json stamped
-npm run deploy       # build + netlify deploy --prod --dir=dist (link a Netlify site first)
 ```
+
+### Deploying
+
+The game deploys to Netlify site `684d55ab-933f-46c1-8e64-f485df605403` by uploading `dist/`. Netlify doesn't build anything itself. The Netlify command-line tool runs through `npx`, so there's nothing to install globally.
+
+```bash
+npx netlify-cli@27 login     # once per machine (or set NETLIFY_AUTH_TOKEN for CI)
+npm run deploy:draft         # build + a private preview URL; the live site is untouched
+npm run deploy               # build + publish to production
+```
+
+Online play needs the site served from a `*.pomelopenguin.com` address (e.g. `penguin-push.pomelopenguin.com`): the shared multiplayer relay only accepts pages from there. On a plain `*.netlify.app` address, solo play works but "Play with Friends" can't connect. Set the custom domain in Netlify under Domain management.
 
 ### Music
 

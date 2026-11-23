@@ -30,4 +30,8 @@ architecture.
 ## Commands
 
 `npm run dev` (port 3000), `npm run dev:relay` (port 8788), `npm test`, `npm run test:e2e`,
-`npm run check`, `npm run build`, `npm run deploy`.
+`npm run check`, `npm run build`, `npm run deploy:draft` (preview URL), `npm run deploy` (production).
+
+Netlify site ID: `684d55ab-933f-46c1-8e64-f485df605403` (baked into the deploy scripts). Deploys upload
+`dist/` via `npx netlify-cli@27`; needs `netlify login` or `NETLIFY_AUTH_TOKEN`. Online play only works
+from a `*.pomelopenguin.com` origin (the relay's allowlist).
