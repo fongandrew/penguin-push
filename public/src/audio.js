@@ -177,6 +177,9 @@ export function sfx(name) {
 		case 'throw':
 			noise(0.15, 0.15, 5000);
 			break;
+		case 'whoosh':
+			noise(0.12, 0.1, 3500);
+			break;
 		case 'poof':
 			noise(0.2, 0.25, 1800);
 			tone(200, 0.15, 'sine', 0.1, 120);

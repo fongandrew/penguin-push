@@ -238,8 +238,7 @@ export function renderHud(state, portraits) {
 			: p.lives > 5
 				? `❤️×${p.lives}`
 				: '❤️'.repeat(p.lives) + '🤍'.repeat(Math.max(0, 5 - p.lives));
-		const power =
-			p.power === 'snowball' ? `❄️${p.uses}` : p.power === 'slide' ? `🛷${p.uses}` : '';
+		const power = p.power === 'snowball' ? `❄️${p.uses}` : p.power === 'fish' ? '🐟' : '';
 		const mega = p.megaMs > 0 ? '💪' : '';
 		const wins = state.tally.get(state.roster[p.id]?.key ?? '')?.wins ?? 0;
 		return { p, out, lives, power: power + mega, wins };

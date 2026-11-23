@@ -20,7 +20,7 @@ import { defaultLook } from './looks.js';
  */
 
 /** @typedef {'play' | 'fall' | 'respawn' | 'out'} PenguinMode */
-/** @typedef {'' | 'snowball' | 'slide'} PowerKind */
+/** @typedef {'' | 'snowball' | 'fish'} PowerKind */
 
 /**
  * @typedef {object} Penguin
@@ -42,7 +42,7 @@ import { defaultLook } from './looks.js';
  * @property {number} knockMs
  * @property {number} shoveMs Flipper-slap animation.
  * @property {number} cooldownMs Until the next shove.
- * @property {number} slideMs Belly slide remaining.
+ * @property {number} shoveQueuedMs A shove pressed during the cooldown, waiting to fire.
  * @property {number} teeterMs How long it's been wobbling at the edge (0 = not).
  * @property {number} megaMs Mega flippers remaining.
  * @property {PowerKind} power
@@ -71,6 +71,7 @@ import { defaultLook } from './looks.js';
  * @property {number} y0
  * @property {number} angle
  * @property {number} t0
+ * @property {'snowball' | 'fish'} kind
  * @property {boolean} dead
  */
 
@@ -181,7 +182,7 @@ export function makePenguin(id, name, look, spot, bot) {
 		knockMs: 0,
 		shoveMs: 0,
 		cooldownMs: 0,
-		slideMs: 0,
+		shoveQueuedMs: 0,
 		teeterMs: 0,
 		megaMs: 0,
 		power: '',

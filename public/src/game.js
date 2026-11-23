@@ -28,20 +28,23 @@ import {
 	BUMP_COOLDOWN_MS,
 	BUMP_POWER,
 	CELEBRATE_MS,
+	FISH_HIT,
+	FISH_USES,
 	JAR_R,
 	MAX_LIVES,
 	MEGA_FACTOR,
 	MEGA_MS,
 	PENGUIN_R,
 	SHOVE_ANIM_MS,
+	SHOVE_BUFFER_MS,
 	SHOVE_CONE,
 	SHOVE_COOLDOWN_MS,
+	SHOVE_EDGE,
+	SHOVE_FULL,
 	SHOVE_POWER,
 	SHOVE_RANGE,
 	SHOVE_RUN,
-	SLIDE_HIT,
-	SLIDE_MS,
-	SLIDE_USES,
+	SHOVE_TURN,
 	SNOWBALL_R,
 	SNOWBALL_RANGE,
 	SNOWBALL_SPEED,
@@ -68,7 +71,7 @@ export const WAVE_PUSH = 8.5;
  * Fire-and-forget game events. (Contested grabs/kicks go through `claim`.)
  *
  * @typedef {{ type: 'push', target: number, ix: number, iy: number, stun: number }
- * 	| { type: 'throw', id: number, by: number, x: number, y: number, angle: number, t: number }
+ * 	| { type: 'throw', id: number, by: number, x: number, y: number, angle: number, t: number, kind: 'snowball' | 'fish' }
  * 	| { type: 'hit', id: number, target: number }
  * 	| { type: 'out', pid: number, t: number }} GameEvent
  */
@@ -221,7 +224,13 @@ function stepOwned(state, link, p, input, t, dt, solids) {
 	}
 	if (!wasPlaying || p.mode !== 'play') return;
 
-	if (input.shove && p.cooldownMs <= 0 && p.stunMs <= 0) shove(state, link, p);
+	// A press during the cooldown isn't lost: it fires as soon as it can.
+	if (input.shove) p.shoveQueuedMs = SHOVE_BUFFER_MS;
+	if (p.shoveQueuedMs > 0 && p.cooldownMs <= 0 && p.stunMs <= 0) {
+		p.shoveQueuedMs = 0;
+		shove(state, link, p);
+	}
+	p.shoveQueuedMs = Math.max(0, p.shoveQueuedMs - dt * 1000);
 	if (input.power && p.stunMs <= 0) usePower(state, link, p, t);
 	bumps(state, link, p, t);
 	giantSnowballs(state, link, p, t);
@@ -241,20 +250,36 @@ function shove(state, link, p) {
 	p.cooldownMs = SHOVE_COOLDOWN_MS;
 	const mega = p.megaMs > 0;
 	const range = SHOVE_RANGE + (mega ? 0.35 : 0);
+	const targets = state.penguins.filter((q) => {
+		if (q === p || q.mode !== 'play') return false;
+		const d = Math.hypot(q.x - p.x, q.y - p.y);
+		return d <= range && d > 1e-6;
+	});
+	const off = (/** @type {Penguin} */ q) =>
+		Math.abs(angleDiff(Math.atan2(q.y - p.y, q.x - p.x), p.face));
+	// Nobody in front, but someone close at your side? Turn and slap them.
+	if (!targets.some((q) => off(q) <= SHOVE_CONE)) {
+		const side = targets.filter((q) => off(q) <= SHOVE_TURN).sort((a, b) => off(a) - off(b))[0];
+		if (side) p.face = Math.atan2(side.y - p.y, side.x - p.x);
+	}
 	let hit = false;
-	for (const q of state.penguins) {
-		if (q === p || q.mode !== 'play') continue;
+	for (const q of targets) {
+		const a = off(q);
+		if (a > SHOVE_CONE) continue;
 		const dx = q.x - p.x;
 		const dy = q.y - p.y;
 		const d = Math.hypot(dx, dy);
-		if (d > range || d < 1e-6) continue;
-		if (Math.abs(angleDiff(Math.atan2(dy, dx), p.face)) > SHOVE_CONE) continue;
+		// Dead ahead: full strength. Off to the side: still a push, a softer one.
+		const align =
+			a <= SHOVE_FULL
+				? 1
+				: 1 - (1 - SHOVE_EDGE) * ((a - SHOVE_FULL) / (SHOVE_CONE - SHOVE_FULL));
 		// A running shove hits much harder than a standing one.
 		const closing = Math.max(
 			0,
 			Math.min(WALK_SPEED * 1.1, ((p.vx - q.vx) * dx + (p.vy - q.vy) * dy) / d),
 		);
-		const power = (SHOVE_POWER + SHOVE_RUN * closing) * (mega ? MEGA_FACTOR : 1);
+		const power = (SHOVE_POWER + SHOVE_RUN * closing) * align * (mega ? MEGA_FACTOR : 1);
 		// Mostly away from the shover, a bit along their facing.
 		const nx = (dx / d) * 0.75 + Math.cos(p.face) * 0.25;
 		const ny = (dy / d) * 0.75 + Math.sin(p.face) * 0.25;
@@ -262,7 +287,7 @@ function shove(state, link, p) {
 		push(state, link, q, (nx / n) * power, (ny / n) * power, 0);
 		hit = true;
 	}
-	// A little lunge into the slap.
+	// A little lunge into the slap, hit or miss.
 	p.vx += Math.cos(p.face) * 1.6;
 	p.vy += Math.sin(p.face) * 1.6;
 	state.fx.push({ kind: 'slap', x: p.x, y: p.y, pid: p.id, z: hit ? 1 : 0 });
@@ -292,39 +317,37 @@ export function push(state, link, q, ix, iy, stun) {
  * @param {number} t
  */
 function usePower(state, link, p, t) {
-	if (p.power === 'snowball' && p.uses > 0) {
-		let angle = p.face;
-		let best = 0.55;
-		for (const q of state.penguins) {
-			if (q === p || q.mode !== 'play') continue;
-			const d = Math.hypot(q.x - p.x, q.y - p.y);
-			if (d > SNOWBALL_RANGE) continue;
-			const a = Math.atan2(q.y - p.y, q.x - p.x);
-			const diff = Math.abs(angleDiff(a, p.face));
-			if (diff < best) {
-				best = diff;
-				angle = a;
-			}
+	if ((p.power !== 'snowball' && p.power !== 'fish') || p.uses <= 0) return;
+	// Auto-aim at whoever's roughly in front.
+	let angle = p.face;
+	let best = 0.55;
+	for (const q of state.penguins) {
+		if (q === p || q.mode !== 'play') continue;
+		const d = Math.hypot(q.x - p.x, q.y - p.y);
+		if (d > SNOWBALL_RANGE) continue;
+		const a = Math.atan2(q.y - p.y, q.x - p.x);
+		const diff = Math.abs(angleDiff(a, p.face));
+		if (diff < best) {
+			best = diff;
+			angle = a;
 		}
-		p.face = angle;
-		const id = ((p.id & 0xf) << 12) | (state.throwSeq++ & 0xfff);
-		const ev = {
-			type: /** @type {const} */ ('throw'),
-			id,
-			by: p.id,
-			x: p.x + Math.cos(angle) * 0.5,
-			y: p.y + Math.sin(angle) * 0.5,
-			angle,
-			t: Math.round(t),
-		};
-		addThrow(state, ev);
-		link.send(ev);
-		p.shoveMs = SHOVE_ANIM_MS;
-		usedOne(p);
-	} else if (p.power === 'slide' && p.uses > 0) {
-		p.slideMs = SLIDE_MS;
-		usedOne(p);
 	}
+	p.face = angle;
+	const id = ((p.id & 0xf) << 12) | (state.throwSeq++ & 0xfff);
+	const ev = {
+		type: /** @type {const} */ ('throw'),
+		id,
+		by: p.id,
+		x: p.x + Math.cos(angle) * 0.5,
+		y: p.y + Math.sin(angle) * 0.5,
+		angle,
+		t: Math.round(t),
+		kind: p.power,
+	};
+	addThrow(state, ev);
+	link.send(ev);
+	p.shoveMs = SHOVE_ANIM_MS;
+	usedOne(p);
 }
 
 /** @param {Penguin} p */
@@ -369,16 +392,14 @@ function bumps(state, link, p, t) {
 		const closing = (p.vx - q.vx) * nx + (p.vy - q.vy) * ny;
 		const last = p.bumpAt.get(q.id) ?? -Infinity;
 		if (t - last < BUMP_COOLDOWN_MS) continue;
-		const sliding = p.slideMs > 0;
-		if (closing < 0.9 && !sliding) continue;
+		if (closing < 0.9) continue;
 		p.bumpAt.set(q.id, t);
 		if (both) q.bumpAt.set(p.id, t);
-		const power = sliding ? SLIDE_HIT : Math.max(0, closing) * BUMP_POWER;
-		push(state, link, q, nx * power, ny * power, sliding ? 350 : 0);
-		const recoil = sliding ? 2 : Math.max(0, closing) * 0.45;
+		const power = Math.max(0, closing) * BUMP_POWER;
+		push(state, link, q, nx * power, ny * power, 0);
+		const recoil = Math.max(0, closing) * 0.45;
 		p.vx -= nx * recoil;
 		p.vy -= ny * recoil;
-		if (sliding) p.slideMs = 0;
 	}
 }
 
@@ -402,7 +423,7 @@ function giantSnowballs(state, link, p, t) {
 			const d = Math.hypot(dx, dy);
 			if (d > BALL_R + PENGUIN_R + 0.12) return;
 			const toward = (p.vx * dx + p.vy * dy) / (d || 1);
-			if (toward < 0.6 && p.slideMs <= 0 && !(p.shoveMs > SHOVE_ANIM_MS - 20)) return;
+			if (toward < 0.6 && !(p.shoveMs > SHOVE_ANIM_MS - 20)) return;
 			const angle = Math.atan2(dy, dx);
 			// Snowballs only go downhill: shoving from below does nothing.
 			if (!kickAllowed(arena, i, angle)) return;
@@ -451,7 +472,6 @@ function giantSnowballs(state, link, p, t) {
 		p.vx = ux * push - uy * lat;
 		p.vy = uy * push + ux * lat;
 		p.knockMs = Math.max(p.knockMs, 250);
-		p.slideMs = 0;
 	});
 }
 
@@ -523,7 +543,7 @@ export function grant(state, link, claim) {
 		p.megaMs = MEGA_MS;
 	} else {
 		p.power = jar.power;
-		p.uses = jar.power === 'snowball' ? SNOWBALL_USES : SLIDE_USES;
+		p.uses = jar.power === 'snowball' ? SNOWBALL_USES : FISH_USES;
 	}
 	if (p.id === state.myPid) {
 		state.toast =
@@ -531,8 +551,8 @@ export function grant(state, link, claim) {
 				? '+1 life! ❤️'
 				: jar.power === 'snowball'
 					? 'Snowballs! ❄️'
-					: jar.power === 'slide'
-						? 'Belly slide! 🛷'
+					: jar.power === 'fish'
+						? 'A fish to throw! 🐟'
 						: 'Mega flippers! 💪';
 		state.toastMs = 1600;
 	}
@@ -551,6 +571,7 @@ export function addThrow(state, ev) {
 		y0: ev.y,
 		angle: ev.angle,
 		t0: ev.t,
+		kind: ev.kind,
 		dead: false,
 	});
 	state.fx.push({ kind: 'throw', x: ev.x, y: ev.y, pid: ev.by });
@@ -602,7 +623,10 @@ function stepThrows(state, link, t) {
 			if (Math.hypot(p.x - pos.x, p.y - pos.y) > PENGUIN_R + SNOWBALL_R + 0.1) continue;
 			if (!link.owns(p.id)) continue;
 			th.dead = true;
-			knock(p, Math.cos(th.angle) * 2.5, Math.sin(th.angle) * 2.5, STUN_MS);
+			// A snowball makes you dizzy; a fish just bowls you over.
+			if (th.kind === 'fish')
+				knock(p, Math.cos(th.angle) * FISH_HIT, Math.sin(th.angle) * FISH_HIT, 0);
+			else knock(p, Math.cos(th.angle) * 2.5, Math.sin(th.angle) * 2.5, STUN_MS);
 			state.fx.push({ kind: 'poof', x: pos.x, y: pos.y, z: pos.z, pid: p.id });
 			link.send({ type: 'hit', id: th.id, target: p.id });
 			break;

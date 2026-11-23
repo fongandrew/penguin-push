@@ -151,6 +151,17 @@ describe('wire format', () => {
 		for (const ev of evs) expect(decodeEvent(encodeEvent(/** @type {any} */ (ev)))).toEqual(ev);
 	});
 
+	it('round-trips a throw, fish or snowball (positions are quantized)', () => {
+		for (const kind of /** @type {const} */ (['fish', 'snowball'])) {
+			const ev = { type: 'throw', id: 12, by: 1, x: 1.5, y: -2.5, angle: 0.5, t: 3000, kind };
+			const back = /** @type {any} */ (decodeEvent(encodeEvent(/** @type {any} */ (ev))));
+			expect(back).toMatchObject({ type: 'throw', id: 12, by: 1, t: 3000, kind });
+			expect(back.x).toBeCloseTo(1.5, 2);
+			expect(back.y).toBeCloseTo(-2.5, 2);
+			expect(back.angle).toBeCloseTo(0.5, 5);
+		}
+	});
+
 	it('builds rosters: humans first, bots to fill, never fewer than two', () => {
 		expect(makeRoster([0], 0).map((r) => r.kind)).toEqual(['human', 'bot']);
 		expect(makeRoster([0, 1, 2], 3)).toHaveLength(4);

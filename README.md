@@ -16,14 +16,14 @@ online or against computer penguins, and the wins add up across a session.
 
 ## How to play
 
-- 🕹️ Put your thumb down anywhere and drag to waddle. On a keyboard: <kbd>WASD</kbd> / arrow keys. Nearly-straight snaps to straight, and walking straight eases you into the middle of your row of tiles, so bridges and corridors are easy. Let go and you stop. Getting shoved is what sends you sliding.
+- 🕹️ Put your thumb down anywhere and drag to waddle; the stick stays where your thumb landed. On a keyboard: <kbd>WASD</kbd> / arrow keys. Nearly-straight snaps to straight, and walking straight eases you into the middle of your row of tiles, so bridges and corridors are easy. Let go and you stop. Getting shoved is what sends you sliding.
 - 😬 Walk to the edge by accident and your penguin **teeters**, flapping its flippers. Let go or turn back within about half a second and you're safe; keep pushing toward the water and in you go. Getting shoved, belly-sliding or standing on polished ice gives no second chance. The computer penguins teeter too, and now and then a clumsy one blunders in on its own.
-- 👋 **Push!** (<kbd>Space</kbd>) slaps everyone in front of you with your flippers. From a standstill it's a nudge of about one tile; **run in** and the shove gets much stronger, so build up speed to send someone into the sea. Bumping into someone just jostles them.
+- 👋 **Push!** (<kbd>Space</kbd>) slaps everyone in front of you with your flippers. Dead ahead pushes hardest, someone off to the side still gets a softer push, and if nobody's in front but someone's right beside you, you turn and slap them. Every press slaps (a whoosh if you miss), and a press during the short cooldown fires as soon as it's over. From a standstill it's a nudge of about one tile; **run in** and the shove gets much stronger, so build up speed to send someone into the sea. Bumping into someone just jostles them.
 - ✨ The blue power button (<kbd>E</kbd>, or <kbd>Shift</kbd>/<kbd>Q</kbd>/<kbd>F</kbd>/<kbd>Enter</kbd>) uses your power. On a computer the buttons show their keys, and picking up a power tells you which key to press.
 - ❤️ You start with 5 lives. Fall in and you lose one, then drop back in from the sky.
 - 🫙 Jars pop up on the ice. A **heart** jar gives you a life back. A **fish** jar gives you a power:
   - ❄️ **Snowballs** (×3): auto-aimed, and a hit makes a penguin dizzy for a moment.
-  - 🛷 **Belly slide** (×3): a fast dash that knocks anyone in the way flying. You can steer it a little, and it stops on the brink rather than tipping you into the sea.
+  - 🐟 **A fish** (×1): thrown like a snowball, it doesn't stun, but it knocks the penguin it hits well back, about as far as a running shove.
   - 💪 **Mega flippers**: bigger, stronger shoves for 9 seconds.
 - The results screen shows a leaderboard. Wins add up for as long as the room (or the solo session) lasts.
 

@@ -724,7 +724,7 @@ export function shelteredFrom(arena, dir, x, y, t) {
  * @property {number} spawn ms
  * @property {number} expire ms
  * @property {'heart' | 'fish'} kind
- * @property {'snowball' | 'slide' | 'mega'} power What a fish jar gives.
+ * @property {'snowball' | 'fish' | 'mega'} power What a fish jar gives.
  */
 
 /**
@@ -767,7 +767,7 @@ export function jarAt(arena, i) {
 		spawn,
 		expire: spawn + JAR_LIFE_MS,
 		kind: roll < 0.3 && spawn < SHRINK_START_MS ? 'heart' : 'fish',
-		power: p < 0.45 ? 'snowball' : p < 0.75 ? 'slide' : 'mega',
+		power: p < 0.45 ? 'snowball' : p < 0.75 ? 'fish' : 'mega',
 	};
 	arena.jarCache.set(i, jar);
 	return jar;

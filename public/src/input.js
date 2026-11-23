@@ -1,6 +1,6 @@
 /**
- * Controls. Phones: a floating virtual stick (put your thumb down anywhere on
- * the left/middle of the screen and drag) plus big Push and Power buttons.
+ * Controls. Phones: a virtual stick that appears where your thumb lands and
+ * stays put while you drag, plus big Push and Power buttons.
  * Keyboards: WASD/arrows to move, Space (or J) to push, E (or Q/F/K/Shift/
  * Enter) to use a power.
  */
@@ -9,7 +9,7 @@
 
 const STICK_R = 56;
 
-/** Keys that use your power (snowball, belly slide). */
+/** Keys that use your power (snowball, fish). */
 const POWER_KEYS = ['KeyE', 'KeyQ', 'KeyF', 'KeyK', 'ShiftLeft', 'ShiftRight', 'Enter'];
 
 export class Controls {
@@ -59,10 +59,9 @@ export class Controls {
 			let dx = e.clientX - this.stick.ox;
 			let dy = e.clientY - this.stick.oy;
 			const d = Math.hypot(dx, dy);
-			// Drag past the rim and the ring follows the thumb.
+			// The ring stays where the thumb first landed; past its rim the
+			// knob just pins to the edge (full speed that way).
 			if (d > STICK_R) {
-				this.stick.ox += (dx / d) * (d - STICK_R);
-				this.stick.oy += (dy / d) * (d - STICK_R);
 				dx = (dx / d) * STICK_R;
 				dy = (dy / d) * STICK_R;
 			}

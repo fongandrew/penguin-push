@@ -10,7 +10,14 @@ import { Board } from './board3d.js';
 import { BALL_R, PLAYER_COLORS, SNOWBALL_R, WALLS_CRUMBLE_MS } from './constants.js';
 import { ballAt, jarAvailable } from './contest.js';
 import { throwPos } from './game.js';
-import { animatePenguin, buildPenguin, starGeometry, toon, toonGradient } from './penguin3d.js';
+import {
+	animatePenguin,
+	buildPenguin,
+	makeFish,
+	starGeometry,
+	toon,
+	toonGradient,
+} from './penguin3d.js';
 
 /** @typedef {import('./state.js').State} State */
 /** @typedef {import('./state.js').Penguin} Penguin */
@@ -113,7 +120,7 @@ export class Renderer {
 		this.penguins = new Map();
 		/** @type {Map<number, THREE.Group>} */
 		this.jars = new Map();
-		/** @type {Map<number, THREE.Mesh>} */
+		/** @type {Map<number, THREE.Object3D>} */
 		this.throws = new Map();
 		/** @type {Particle[]} */
 		this.particles = [];
@@ -231,7 +238,6 @@ export class Renderer {
 			shoveMs: 0,
 			knockMs: 0,
 			stunMs: 0,
-			slideMs: 0,
 			megaMs: 0,
 			invulnMs: 0,
 			mode: 'play',
@@ -472,13 +478,26 @@ export class Renderer {
 			live.add(th.id);
 			let m = this.throws.get(th.id);
 			if (!m) {
-				m = new THREE.Mesh(new THREE.SphereGeometry(SNOWBALL_R, 12, 10), toon(0xffffff));
-				m.castShadow = true;
+				if (th.kind === 'fish') {
+					// A fish, tumbling end over end along its flight.
+					m = new THREE.Group();
+					const fish = makeFish(1.6);
+					m.add(fish);
+					m.rotation.y = -th.angle;
+				} else {
+					m = new THREE.Mesh(
+						new THREE.SphereGeometry(SNOWBALL_R, 12, 10),
+						toon(0xffffff),
+					);
+					m.castShadow = true;
+				}
 				this.throws.set(th.id, m);
 				this.world.add(m);
 			}
 			const p = throwPos(th, t);
 			m.position.set(p.x, p.z, p.y);
+			const spin = m.children[0];
+			if (th.kind === 'fish' && spin) spin.rotation.z = (t - th.t0) * -0.018;
 		}
 		for (const [id, m] of this.throws) {
 			if (live.has(id)) continue;
@@ -1375,7 +1394,6 @@ export class Portraits {
 				shoveMs: 0,
 				knockMs: 0,
 				stunMs: 0,
-				slideMs: 0,
 				megaMs: 0,
 				invulnMs: 0,
 				mode: 'play',

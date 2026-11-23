@@ -67,7 +67,7 @@ const XY = 24;
 const Z_MIN = -4;
 const Z_MAX = 12;
 const MODES = /** @type {PenguinMode[]} */ (['play', 'fall', 'respawn', 'out']);
-const POWERS = /** @type {PowerKind[]} */ (['', 'snowball', 'slide']);
+const POWERS = /** @type {PowerKind[]} */ (['', 'snowball', 'fish']);
 
 /** Map choices in the lobby; 'mix' rotates through every map. */
 export const MAP_CHOICES = ['mix', ...MAPS.map((m) => m.id)];
@@ -84,7 +84,7 @@ export const MAP_CHOICES = ['mix', ...MAPS.map((m) => m.id)];
  * @property {number} speed
  * @property {number} lives
  * @property {PenguinMode} mode
- * @property {number} flags bit0 stun, 1 invuln, 2 shove, 3 slide, 4 mega, 5 knock, 6 teeter
+ * @property {number} flags bit0 stun, 1 invuln, 2 shove, (3 unused), 4 mega, 5 knock, 6 teeter
  * @property {PowerKind} power
  * @property {number} uses
  * @property {Look} look
@@ -248,6 +248,7 @@ export function encodeEvent(ev) {
 				.q16(ev.y, -XY, XY)
 				.f32(ev.angle)
 				.u32(Math.max(0, ev.t))
+				.u8(ev.kind === 'fish' ? 1 : 0)
 				.done();
 		case 'hit':
 			return w.u8(EV.hit).u16(ev.id).u8(ev.target).done();
@@ -296,6 +297,7 @@ export function decodeEvent(bytes) {
 				y: r.q16(-XY, XY),
 				angle: r.f32(),
 				t: r.u32(),
+				kind: r.u8() === 1 ? 'fish' : 'snowball',
 			};
 		case EV.hit:
 			return { type: 'hit', id: r.u16(), target: r.u8() };
@@ -924,7 +926,6 @@ export function toSnap(p) {
 		(p.stunMs > 0 ? 1 : 0) |
 		(p.invulnMs > 0 ? 2 : 0) |
 		(p.shoveMs > 0 ? 4 : 0) |
-		(p.slideMs > 0 ? 8 : 0) |
 		(p.megaMs > 0 ? 16 : 0) |
 		(p.knockMs > 0 ? 32 : 0) |
 		(p.teeterMs > 0 ? 64 : 0);
@@ -987,7 +988,6 @@ export function applySnap(p, s) {
 	p.stunMs = s.flags & 1 ? Math.max(p.stunMs, 200) : 0;
 	p.invulnMs = s.flags & 2 ? Math.max(p.invulnMs, 200) : 0;
 	p.shoveMs = s.flags & 4 ? Math.max(p.shoveMs, SHOVE_ANIM_MS * 0.6) : 0;
-	p.slideMs = s.flags & 8 ? Math.max(p.slideMs, 200) : 0;
 	p.megaMs = s.flags & 16 ? Math.max(p.megaMs, 200) : 0;
 	p.knockMs = s.flags & 32 ? Math.max(p.knockMs, 200) : 0;
 	p.teeterMs = s.flags & 64 ? Math.max(p.teeterMs, 100) : 0;

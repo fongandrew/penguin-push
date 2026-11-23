@@ -295,12 +295,13 @@ export function botInput(state, p, t) {
 				) {
 					wantPower = true;
 				}
+				// Save the fish for someone near the water: it knocks them in.
 				if (
-					p.power === 'slide' &&
-					dist < 4.5 &&
-					facing < 0.22 &&
+					p.power === 'fish' &&
+					dist < 6 &&
+					facing < 0.3 &&
 					edginess(arena, target.x, target.y, t) > 0.45 &&
-					Math.random() < 0.08
+					Math.random() < 0.06
 				) {
 					wantPower = true;
 				}

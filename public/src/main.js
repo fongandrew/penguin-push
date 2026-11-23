@@ -597,7 +597,8 @@ export function start() {
 	function playFx(s) {
 		for (const fx of s.fx) {
 			if (fx.kind === 'slap') {
-				if (fx.z) sfx('slap');
+				// Every slap makes a sound: a smack on a hit, a whoosh on a miss.
+				sfx(fx.z ? 'slap' : 'whoosh');
 			} else if (fx.kind === 'heart' || fx.kind === 'fish') sfx(fx.kind);
 			else sfx(fx.kind);
 		}
@@ -636,7 +637,7 @@ export function start() {
 		if (state.toastMs > 0) {
 			// On a keyboard, say which key uses the power.
 			const text =
-				finePointer && /Snowballs|Belly/.test(state.toast)
+				finePointer && /Snowballs|fish/.test(state.toast)
 					? `${state.toast} Press E`
 					: state.toast;
 			if (toast.hidden || toast.textContent !== text) {
@@ -657,7 +658,7 @@ export function start() {
 			lastPower = powerKey;
 		}
 		if (me && me.power) {
-			const icon = me.power === 'snowball' ? '❄️' : '🛷';
+			const icon = me.power === 'snowball' ? '❄️' : '🐟';
 			const ic = /** @type {HTMLElement} */ (pw.querySelector('.icon'));
 			const us = /** @type {HTMLElement} */ (pw.querySelector('.uses'));
 			if (ic.textContent !== icon) ic.textContent = icon;

@@ -25,9 +25,6 @@ import {
 	RESPAWN_HEIGHT,
 	RESPAWN_MS,
 	SLICK_DRAG,
-	SLIDE_MS,
-	SLIDE_SPEED,
-	SLIDE_TURN,
 	TEETER_MS,
 	TURN_GRIP,
 	WALK_ACCEL,
@@ -64,17 +61,6 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 	p.shoveMs = Math.max(0, p.shoveMs - ms);
 	p.cooldownMs = Math.max(0, p.cooldownMs - ms);
 	p.megaMs = Math.max(0, p.megaMs - ms);
-	const wasSliding = p.slideMs > 0;
-	p.slideMs = Math.max(0, p.slideMs - ms);
-	// A slide that just ran out drops you back to walking pace: no long
-	// skate afterwards. (One that ended in a hit keeps its recoil.)
-	if (wasSliding && p.slideMs === 0 && p.knockMs <= 0) {
-		const sp = Math.hypot(p.vx, p.vy);
-		if (sp > WALK_SPEED) {
-			p.vx *= WALK_SPEED / sp;
-			p.vy *= WALK_SPEED / sp;
-		}
-	}
 	p.modeMs += ms;
 
 	if (p.mode === 'out') return res;
@@ -139,90 +125,71 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 		my = 0;
 	}
 
-	if (p.slideMs > 0) {
-		// Belly slide: fast, steerable a little.
-		if (mx !== 0 || my !== 0) p.face = turnToward(p.face, Math.atan2(my, mx), SLIDE_TURN * dt);
-		const sp = SLIDE_SPEED * (0.55 + 0.45 * (p.slideMs / SLIDE_MS));
-		p.vx = Math.cos(p.face) * sp + here.vx;
-		p.vy = Math.sin(p.face) * sp + here.vy;
-		// About to slide off into the water? Stop on the brink (with a teeter)
-		// rather than flinging yourself in. Keep pushing and you go in, as
-		// with walking.
-		const look = PENGUIN_R * 0.5 + sp * dt * 2;
-		if (!supportAt(arena, p.x + Math.cos(p.face) * look, p.y + Math.sin(p.face) * look, t).ok) {
-			p.slideMs = 0;
-			p.vx = here.vx;
-			p.vy = here.vy;
-			p.teeterMs = Math.max(p.teeterMs, 1);
+	// Relative to whatever we're standing on, so a drifting floe carries us.
+	let rvx = p.vx - here.vx;
+	let rvy = p.vy - here.vy;
+	// Shoved and sliding faster than walking pace: that's ice. Otherwise
+	// your feet grip.
+	const flung = p.knockMs > 0 || Math.hypot(rvx, rvy) > WALK_SPEED * 1.1;
+	const drag = here.slick ? SLICK_DRAG : flung ? ICE_DRAG : GRIP_DRAG;
+	const control = p.knockMs > 0 ? 0.18 : here.slick ? 0.45 : 1;
+	if (mx !== 0 || my !== 0) {
+		const tx = mx * WALK_SPEED;
+		const ty = my * WALK_SPEED;
+		let ax = tx - rvx;
+		let ay = ty - rvy;
+		const al = Math.hypot(ax, ay);
+		const max = WALK_ACCEL * control * dt;
+		if (al > max) {
+			ax = (ax / al) * max;
+			ay = (ay / al) * max;
 		}
-	} else {
-		// Relative to whatever we're standing on, so a drifting floe carries us.
-		let rvx = p.vx - here.vx;
-		let rvy = p.vy - here.vy;
-		// Shoved and sliding faster than walking pace: that's ice. Otherwise
-		// your feet grip.
-		const flung = p.knockMs > 0 || Math.hypot(rvx, rvy) > WALK_SPEED * 1.1;
-		const drag = here.slick ? SLICK_DRAG : flung ? ICE_DRAG : GRIP_DRAG;
-		const control = p.knockMs > 0 ? 0.18 : here.slick ? 0.45 : 1;
-		if (mx !== 0 || my !== 0) {
-			const tx = mx * WALK_SPEED;
-			const ty = my * WALK_SPEED;
-			let ax = tx - rvx;
-			let ay = ty - rvy;
-			const al = Math.hypot(ax, ay);
-			const max = WALK_ACCEL * control * dt;
-			if (al > max) {
-				ax = (ax / al) * max;
-				ay = (ay / al) * max;
-			}
-			// Faster than walking (just got shoved): let drag do the slowing.
-			if (Math.hypot(rvx, rvy) > WALK_SPEED * 1.05) {
-				ax *= 0.3;
-				ay *= 0.3;
-			}
-			rvx += ax;
-			rvy += ay;
-			if (!flung && !here.slick) {
-				// Kill sideways drift so turns are tight.
-				const ux = mx / (Math.hypot(mx, my) || 1);
-				const uy = my / (Math.hypot(mx, my) || 1);
-				const along = rvx * ux + rvy * uy;
-				const k = Math.exp(-TURN_GRIP * dt);
-				rvx = ux * along + (rvx - ux * along) * k;
-				rvy = uy * along + (rvy - uy * along) * k;
-				// Walking straight: ease into the middle of your row/column.
-				const tk = tileAt(arena, p.x, p.y);
-				if (axis && tk >= 0) {
-					const c = tileCenter(arena, tk);
-					const off = axis === 'x' ? c.y - p.y : c.x - p.x;
-					if (Math.abs(off) < CELL * 0.4) {
-						const step = off * Math.min(1, LANE_ASSIST * dt);
-						if (axis === 'x') p.y += step;
-						else p.x += step;
-					}
+		// Faster than walking (just got shoved): let drag do the slowing.
+		if (Math.hypot(rvx, rvy) > WALK_SPEED * 1.05) {
+			ax *= 0.3;
+			ay *= 0.3;
+		}
+		rvx += ax;
+		rvy += ay;
+		if (!flung && !here.slick) {
+			// Kill sideways drift so turns are tight.
+			const ux = mx / (Math.hypot(mx, my) || 1);
+			const uy = my / (Math.hypot(mx, my) || 1);
+			const along = rvx * ux + rvy * uy;
+			const k = Math.exp(-TURN_GRIP * dt);
+			rvx = ux * along + (rvx - ux * along) * k;
+			rvy = uy * along + (rvy - uy * along) * k;
+			// Walking straight: ease into the middle of your row/column.
+			const tk = tileAt(arena, p.x, p.y);
+			if (axis && tk >= 0) {
+				const c = tileCenter(arena, tk);
+				const off = axis === 'x' ? c.y - p.y : c.x - p.x;
+				if (Math.abs(off) < CELL * 0.4) {
+					const step = off * Math.min(1, LANE_ASSIST * dt);
+					if (axis === 'x') p.y += step;
+					else p.x += step;
 				}
 			}
-			if (p.stunMs <= 0 && p.knockMs <= 0)
-				p.face = turnToward(p.face, Math.atan2(my, mx), 14 * dt);
 		}
-		const damp =
-			mx !== 0 || my !== 0
-				? flung || here.slick
-					? Math.max(0, 1 - drag * 0.15 * dt)
-					: 1
-				: Math.exp(-drag * dt);
-		rvx *= damp;
-		rvy *= damp;
-		p.vx = rvx + here.vx;
-		p.vy = rvy + here.vy;
+		if (p.stunMs <= 0 && p.knockMs <= 0)
+			p.face = turnToward(p.face, Math.atan2(my, mx), 14 * dt);
 	}
+	const damp =
+		mx !== 0 || my !== 0
+			? flung || here.slick
+				? Math.max(0, 1 - drag * 0.15 * dt)
+				: 1
+			: Math.exp(-drag * dt);
+	rvx *= damp;
+	rvy *= damp;
+	p.vx = rvx + here.vx;
+	p.vy = rvy + here.vy;
 
 	// Teeter: walking off the edge (rather than being shoved off) catches
 	// you at the brink for a moment. Let go or turn away and you're fine;
 	// keep pushing toward the water and in you go.
 	const walking =
 		p.knockMs <= 0 &&
-		p.slideMs <= 0 &&
 		!here.slick &&
 		Math.hypot(p.vx - here.vx, p.vy - here.vy) < WALK_SPEED * 1.1;
 	let teetering = false;
@@ -291,7 +258,6 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 			p.vx -= 1.3 * vn * hitBlock.nx;
 			p.vy -= 1.3 * vn * hitBlock.ny;
 		}
-		if (p.slideMs > 0) p.slideMs = 0;
 	}
 
 	p.z = footHeight(arena, p.x, p.y, t);
@@ -300,7 +266,6 @@ export function movePenguin(p, input, arena, t, dt, others, solids) {
 	if (!supportAt(arena, p.x, p.y, t).ok) {
 		p.mode = 'fall';
 		p.modeMs = 0;
-		p.slideMs = 0;
 		p.stunMs = 0;
 		p.teeterMs = 0;
 		res.fell = true;
@@ -346,7 +311,6 @@ export function knock(p, ix, iy, stunMs) {
 	p.vy += iy;
 	p.knockMs = Math.max(p.knockMs, KNOCK_MS * Math.min(1.6, Math.hypot(ix, iy) / 8 + 0.4));
 	if (stunMs > 0) p.stunMs = Math.max(p.stunMs, stunMs);
-	p.slideMs = 0;
 	return true;
 }
 

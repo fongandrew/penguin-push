@@ -32,13 +32,20 @@ export const LANE_ASSIST = 5;
 export const KNOCK_MS = 420;
 
 /** Flipper shove. */
-export const SHOVE_RANGE = 1.35;
-export const SHOVE_CONE = 1.1; // radians either side of facing
+export const SHOVE_RANGE = 1.6;
+export const SHOVE_CONE = 1.25; // radians either side of facing
+/** Within this of dead ahead the shove is full strength; it tapers to SHOVE_EDGE at the cone's edge. */
+export const SHOVE_FULL = 0.45;
+export const SHOVE_EDGE = 0.55;
+/** Nobody ahead but someone close at your side (within this angle)? Turn to slap them. */
+export const SHOVE_TURN = 2.2;
+/** A press during the cooldown is remembered (as long as the cooldown), then fires. */
+export const SHOVE_BUFFER_MS = 400;
 /** A shove from a standstill: a nudge, about a tile. */
 export const SHOVE_POWER = 4.5;
 /** Extra shove per unit of closing speed: run in to really send them. */
 export const SHOVE_RUN = 1.4;
-export const SHOVE_COOLDOWN_MS = 520;
+export const SHOVE_COOLDOWN_MS = 400;
 export const SHOVE_ANIM_MS = 260;
 export const MEGA_FACTOR = 1.75;
 export const MEGA_MS = 9000;
@@ -47,13 +54,9 @@ export const MEGA_MS = 9000;
 export const BUMP_POWER = 0.9;
 export const BUMP_COOLDOWN_MS = 300;
 
-/** Belly slide (fish power). */
-export const SLIDE_SPEED = 9.5;
-export const SLIDE_MS = 560;
-/** How fast you can steer mid-slide (radians/s): curve, not U-turn. */
-export const SLIDE_TURN = 2.6;
-export const SLIDE_HIT = 12;
-export const SLIDE_USES = 3;
+/** A thrown fish (fish power): one throw, a big knock-back, no stun. */
+export const FISH_HIT = 10.5;
+export const FISH_USES = 1;
 
 /** Snowballs (fish power). */
 export const SNOWBALL_USES = 3;

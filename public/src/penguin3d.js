@@ -97,6 +97,7 @@ function part(geo, mat, pos, rot = [0, 0, 0]) {
  * @property {THREE.Group} species
  * @property {THREE.Group} stars
  * @property {THREE.Mesh} handBall
+ * @property {THREE.Group} handFish
  * @property {THREE.Object3D | null} spinner Propeller.
  * @property {THREE.Object3D | null} sway Scarf tail / cape.
  * @property {'tail' | 'cape'} swayKind
@@ -154,6 +155,11 @@ export function buildPenguin(look) {
 	const handBall = blob(toon(0xffffff), [0.12, 0.12, 0.12], [0, -0.52, 0.05], true);
 	handBall.visible = false;
 	flipR.add(handBall);
+	const handFish = makeFish(0.55);
+	handFish.position.set(0, -0.52, 0.08);
+	handFish.rotation.set(0, Math.PI / 2, 0.6);
+	handFish.visible = false;
+	flipR.add(handFish);
 
 	/** @type {Rig} */
 	const rig = {
@@ -173,6 +179,7 @@ export function buildPenguin(look) {
 		species,
 		stars,
 		handBall,
+		handFish,
 		spinner: null,
 		sway: null,
 		swayKind: 'tail',
@@ -202,7 +209,7 @@ export function setLook(rig, look) {
 	}
 	rig.flipL.clear();
 	rig.flipR.clear();
-	rig.flipR.add(rig.handBall);
+	rig.flipR.add(rig.handBall, rig.handFish);
 	rig.spinner = null;
 	rig.sway = null;
 	rig.hatSlot.rotation.set(0, 0, 0);
@@ -708,7 +715,7 @@ export function animatePenguin(rig, p, time, dt, opts = {}) {
 		flapR = 0.5;
 		body.rotation.x = 0.3 * k;
 	}
-	if (p.knockMs > 0 && p.stunMs <= 0 && p.slideMs <= 0) {
+	if (p.knockMs > 0 && p.stunMs <= 0) {
 		flapL = 1.5 + Math.sin(time * 30) * 0.4;
 		flapR = 1.5 + Math.sin(time * 30 + 1) * 0.4;
 		body.rotation.x = -0.2;
@@ -727,15 +734,6 @@ export function animatePenguin(rig, p, time, dt, opts = {}) {
 		body.rotation.z = Math.sin(time * 7) * 0.16;
 		flapL = 0.6;
 		flapR = 0.6;
-	}
-	if (p.slideMs > 0) {
-		body.rotation.x = 1.3;
-		body.position.y = 0.32;
-		body.position.z = -0.1;
-		flapL = 1.2;
-		flapR = 1.2;
-		fwdL = 1.2;
-		fwdR = 1.2;
 	}
 	if (p.mode === 'fall') {
 		flapL = 1.0 + Math.sin(time * 28) * 0.7;
@@ -772,6 +770,8 @@ export function animatePenguin(rig, p, time, dt, opts = {}) {
 	rig.flipMeshR.position.y = -0.24 * mega;
 	rig.handBall.visible = p.power === 'snowball' && p.mode === 'play';
 	rig.handBall.position.y = -0.52 * mega;
+	rig.handFish.visible = p.power === 'fish' && p.mode === 'play';
+	rig.handFish.position.y = -0.52 * mega;
 
 	// Blink (or dizzy squint).
 	rig.blinkAt -= dt;
@@ -800,4 +800,28 @@ export function animatePenguin(rig, p, time, dt, opts = {}) {
 
 	// Blink out while invulnerable after dropping back in.
 	rig.root.visible = !(p.invulnMs > 0 && p.mode === 'play' && Math.floor(time * 12) % 2 === 0);
+}
+
+/**
+ * A little orange fish (for throwing). Points along +x.
+ *
+ * @param {number} size
+ */
+export function makeFish(size) {
+	const g = new THREE.Group();
+	const orange = toon(0xff9a2a);
+	const body = new THREE.Mesh(new THREE.SphereGeometry(1, 14, 10), orange);
+	body.scale.set(0.3 * size, 0.17 * size, 0.11 * size);
+	body.castShadow = true;
+	g.add(body);
+	const tail = new THREE.Mesh(new THREE.ConeGeometry(0.13 * size, 0.2 * size, 4), orange);
+	tail.rotation.z = Math.PI / 2;
+	tail.position.x = -0.35 * size;
+	g.add(tail);
+	for (const side of [1, -1]) {
+		const eye = new THREE.Mesh(new THREE.SphereGeometry(0.035 * size, 8, 6), toon(0x111111));
+		eye.position.set(0.18 * size, 0.05 * size, 0.09 * size * side);
+		g.add(eye);
+	}
+	return g;
 }
