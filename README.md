@@ -59,6 +59,10 @@ npm run build        # dist/: minified, SW precache + version.json stamped
 npm run deploy       # build + netlify deploy --prod --dir=dist (link a Netlify site first)
 ```
 
+### Offline and updates
+
+`public/sw.js` is a service worker. `npm run build` stamps it with a version hash and the full list of shipped files. The first visit caches the whole game, so it then plays **offline**, including `?room=` links (solo play works offline; friend rooms need the network). On each visit, and whenever the tab comes back into view, the page checks for a new deploy. The new version installs in the background and is used from the next launch, but never mid-match in a friend room. The worker is off on `localhost` so dev edits show up immediately; add `?sw=1` to test it locally.
+
 ## How it's built
 
 There is no bundler: it's static files. ES modules live under `public/src/`. Three.js is

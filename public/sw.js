@@ -64,8 +64,11 @@ self.addEventListener('fetch', (event) => {
 		return;
 	}
 
+	// Page loads ignore the query string: ./?room=ABCD is still the cached
+	// ./ (the room code is read by the page, not the server).
+	const page = request.mode === 'navigate';
 	event.respondWith(
-		caches.match(request).then((hit) => {
+		caches.match(request, { ignoreSearch: page }).then((hit) => {
 			if (hit) return hit;
 			return fetch(request).then((response) => {
 				if (!response.ok || response.type !== 'basic') return response;

@@ -710,10 +710,25 @@ function saveSolo(s, _state) {
 
 function registerServiceWorker() {
 	const host = location.hostname;
-	if (!('serviceWorker' in navigator) || host === 'localhost' || host === '127.0.0.1') return;
-	navigator.serviceWorker.register('./sw.js').catch(() => {
-		// Works without a worker; just not offline.
-	});
+	const local = host === 'localhost' || host === '127.0.0.1';
+	// Off on localhost so dev edits show up immediately; ?sw=1 turns it on to test.
+	const forced = new URLSearchParams(location.search).get('sw') === '1';
+	if (!('serviceWorker' in navigator) || (local && !forced)) return;
+	navigator.serviceWorker
+		.register('./sw.js')
+		.then((reg) => {
+			// Look for a new deploy now and whenever the game comes back into
+			// view (phones keep a tab open for days). The worker installs it in
+			// the background; it's used from the next time the game opens.
+			const check = () => void reg.update().catch(() => {});
+			check();
+			document.addEventListener('visibilitychange', () => {
+				if (!document.hidden) check();
+			});
+		})
+		.catch(() => {
+			// Works without a worker; just not offline.
+		});
 }
 
 start();
