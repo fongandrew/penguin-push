@@ -3,6 +3,8 @@ import { expect, test } from '@playwright/test';
 test.use({ viewport: { width: 390, height: 700 } });
 
 test('title → changing station → solo match → leaderboard', async ({ page }) => {
+	// Software-rendered WebGL in CI is slow; this walks a whole match.
+	test.setTimeout(90000);
 	/** @type {string[]} */
 	const errors = [];
 	page.on('pageerror', (e) => errors.push(e.message));
