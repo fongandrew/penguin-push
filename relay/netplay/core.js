@@ -31,6 +31,12 @@ import {
 export const TO_ALL = -1;
 /** Broadcast to every connected player except the sender. */
 export const TO_OTHERS = -2;
+/**
+ * Reply to the socket the message came from. Not the same as its slot: before a
+ * successful `hello` a connection has no slot (-1, which is `TO_ALL`), so
+ * addressing a refusal by slot would broadcast it to the whole room.
+ */
+export const TO_SENDER = -3;
 
 export const ERR = {
 	VERSION: 'version',
@@ -70,6 +76,25 @@ export const MAX_EVENT_LOG = 256;
 export const RATE_WINDOW_MS = 1000;
 export const RATE_MAX_MESSAGES = 120;
 
+/**
+ * Consecutive over-budget windows before the adapter hangs up. Refusing a
+ * message doesn't make it free: it has already woken the Durable Object and been
+ * billed, so a socket that won't slow down has to go. One bad window is
+ * forgiven, because a phone coming out of a tunnel delivers several seconds of
+ * queued messages at once.
+ */
+export const RATE_MAX_STRIKES = 3;
+
+/**
+ * Messages in a single window that mean hanging up at once. Well past what the
+ * worst honest backlog can hold: `LIVENESS_MS` of queueing at ~45 messages/s is
+ * about 360.
+ */
+export const RATE_KICK_MESSAGES = 600;
+
+/** WebSocket close code (policy violation) for a flooding socket. */
+export const CLOSE_FLOODING = 1008;
+
 /** @typedef {'lobby' | 'playing' | 'results'} Phase */
 /** @typedef {'realtime' | 'turnbased'} Mode */
 
@@ -96,10 +121,22 @@ export const RATE_MAX_MESSAGES = 120;
  * @property {string} token
  * @property {number} windowStart
  * @property {number} windowCount
+ * @property {number} strikes Consecutive windows that went over budget.
+ * @property {boolean} kick Set by the core when the adapter must close this socket.
  */
 
 /**
- * One thing to send. `to` is a slot number, `TO_ALL` or `TO_OTHERS`; `latest`
+ * @param {number} now
+ * @param {number} [slot]
+ * @param {string} [token]
+ * @returns {Conn}
+ */
+export function newConn(now, slot = -1, token = '') {
+	return { slot, token, windowStart: now, windowCount: 0, strikes: 0, kick: false };
+}
+
+/**
+ * One thing to send. `to` is a slot number, `TO_ALL`, `TO_OTHERS` or `TO_SENDER`; `latest`
  * marks a message the adapter may drop for a saturated socket rather than
  * queueing behind it.
  *
@@ -212,6 +249,38 @@ export class RoomCore {
 	}
 
 	/**
+	 * Charge one inbound message against a connection's budget, and decide whether
+	 * the socket has earned a hang-up (`conn.kick`, which the adapter acts on).
+	 *
+	 * Separate from `handle()` because adapters must also charge frames that never
+	 * reach it — a stray text frame wakes the Durable Object like any other.
+	 *
+	 * @param {Conn} conn
+	 * @param {number} [now]
+	 * @returns {boolean} True if the message is within budget.
+	 */
+	charge(conn, now = this.now()) {
+		const elapsed = now - conn.windowStart;
+		if (elapsed > RATE_WINDOW_MS) {
+			// A window that stayed in budget, or a whole window of silence, clears
+			// the record.
+			if (conn.windowCount <= RATE_MAX_MESSAGES || elapsed > 2 * RATE_WINDOW_MS) {
+				conn.strikes = 0;
+			}
+			conn.windowStart = now;
+			conn.windowCount = 0;
+		}
+		conn.windowCount++;
+		if (conn.windowCount <= RATE_MAX_MESSAGES) return true;
+
+		if (conn.windowCount === RATE_MAX_MESSAGES + 1) conn.strikes++;
+		if (conn.strikes >= RATE_MAX_STRIKES || conn.windowCount > RATE_KICK_MESSAGES) {
+			conn.kick = true;
+		}
+		return false;
+	}
+
+	/**
 	 * Route one inbound message. The relay path here is deliberately synchronous
 	 * and allocation-light: a Durable Object serializes on every `await` inside
 	 * its message handler, so an await here would quietly cap room throughput.
@@ -224,23 +293,21 @@ export class RoomCore {
 		const bytes = toBytes(data);
 		const now = this.now();
 
-		if (now - conn.windowStart > RATE_WINDOW_MS) {
-			conn.windowStart = now;
-			conn.windowCount = 0;
-		}
-		conn.windowCount++;
-		if (conn.windowCount > RATE_MAX_MESSAGES) {
-			return [RoomCore.send(conn.slot, this.errorFrame(ERR.RATE))];
+		if (!this.charge(conn, now)) {
+			// Say so once per window; answering every message would double the
+			// flood.
+			const tell = conn.windowCount === RATE_MAX_MESSAGES + 1;
+			return tell ? [RoomCore.send(TO_SENDER, this.errorFrame(ERR.RATE))] : [];
 		}
 
 		const env = decode(bytes);
-		if (!env) return [RoomCore.send(conn.slot, this.errorFrame(ERR.PROTOCOL))];
+		if (!env) return [RoomCore.send(TO_SENDER, this.errorFrame(ERR.PROTOCOL))];
 		if (env.payload.length > maxPayloadFor(env.kind)) {
-			return [RoomCore.send(conn.slot, this.errorFrame(ERR.TOO_BIG, { kind: env.kind }))];
+			return [RoomCore.send(TO_SENDER, this.errorFrame(ERR.TOO_BIG, { kind: env.kind }))];
 		}
 
 		if (env.kind === KIND.HELLO) return this.hello(conn, env.payload);
-		if (conn.slot < 0) return [RoomCore.send(conn.slot, this.errorFrame(ERR.PROTOCOL))];
+		if (conn.slot < 0) return [RoomCore.send(TO_SENDER, this.errorFrame(ERR.PROTOCOL))];
 
 		const player = this.players.get(conn.slot);
 		if (player) player.lastSeen = now;
@@ -291,7 +358,7 @@ export class RoomCore {
 			case KIND.PING:
 				return [
 					RoomCore.send(
-						conn.slot,
+						TO_SENDER,
 						encode(
 							{
 								kind: KIND.PONG,
@@ -309,7 +376,7 @@ export class RoomCore {
 				return this.control(conn, env.payload, bytes, serverTick);
 
 			default:
-				return [RoomCore.send(conn.slot, this.errorFrame(ERR.PROTOCOL))];
+				return [RoomCore.send(TO_SENDER, this.errorFrame(ERR.PROTOCOL))];
 		}
 	}
 
@@ -322,16 +389,16 @@ export class RoomCore {
 	 * @returns {Action[]}
 	 */
 	hello(conn, payload) {
-		if (!this.init) return [RoomCore.send(conn.slot, this.errorFrame(ERR.NO_ROOM))];
+		if (!this.init) return [RoomCore.send(TO_SENDER, this.errorFrame(ERR.NO_ROOM))];
 
 		const msg = decodeJson(payload);
 		if (!msg || typeof msg !== 'object') {
-			return [RoomCore.send(conn.slot, this.errorFrame(ERR.PROTOCOL))];
+			return [RoomCore.send(TO_SENDER, this.errorFrame(ERR.PROTOCOL))];
 		}
 		if (msg.protoVersion !== PROTO_VERSION) {
 			return [
 				RoomCore.send(
-					conn.slot,
+					TO_SENDER,
 					this.errorFrame(ERR.VERSION, { expectedProtocol: PROTO_VERSION }),
 				),
 			];
@@ -339,7 +406,7 @@ export class RoomCore {
 		if (msg.gameId !== this.init.gameId) {
 			return [
 				RoomCore.send(
-					conn.slot,
+					TO_SENDER,
 					this.errorFrame(ERR.NO_ROOM, { expectedGame: this.init.gameId }),
 				),
 			];
@@ -356,7 +423,7 @@ export class RoomCore {
 			if (this.phase !== 'lobby') {
 				return [
 					RoomCore.send(
-						conn.slot,
+						TO_SENDER,
 						this.errorFrame(ERR.VERSION, { expected: this.init.buildId }),
 					),
 				];
@@ -376,7 +443,7 @@ export class RoomCore {
 		let player = this.findByToken(token);
 		if (!player) {
 			const slot = this.freeSlot();
-			if (slot < 0) return [RoomCore.send(conn.slot, this.errorFrame(ERR.FULL))];
+			if (slot < 0) return [RoomCore.send(TO_SENDER, this.errorFrame(ERR.FULL))];
 			player = {
 				slot,
 				name,

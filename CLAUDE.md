@@ -17,8 +17,8 @@ architecture.
 ## Multiplayer
 
 - `public/src/net/` and `relay/` are **generated** from pomelo-penguin's `packages/netplay`
-  (`npm run net:sync`, needs `../pomelo-penguin` or `NETPLAY_REPO`). Don't hand-edit them.
-  Engine changes belong in pomelo-penguin.
+  (`npm run net:sync`, needs `../pomelo-penguin`, `../pomelopenguin.com` or `NETPLAY_REPO`).
+  Don't hand-edit them. Engine changes belong in pomelo-penguin.
 - The relay must never parse game payloads. Everything game-specific is in `multi.js`.
 - Maps are a tile grid (`arena.level`/`block`/`crack`; `CELL` = 1.25). Don't reintroduce free-form
   geometry. Snowballs roll along grid axes and only downhill.

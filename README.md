@@ -93,8 +93,8 @@ types checked by `tsc --checkJs`, the same conventions as the
 Multiplayer runs on **netplay**, the multiplayer engine from pomelo-penguin.
 `npm run net:sync` copies its browser half into `public/src/net/`. It also copies
 the server core and the Node `ws` adapter into `relay/` for local dev and tests.
-It reads from a sibling checkout at `../pomelo-penguin` (override with
-`NETPLAY_REPO=...`). Don't hand-edit those copies. Production uses the shared
+It reads from a sibling checkout at `../pomelo-penguin` or `../pomelopenguin.com`
+(override with `NETPLAY_REPO=...`). Don't hand-edit those copies. Production uses the shared
 relay at `pomelo-play.pomelopenguin.workers.dev`, whose origin allowlist already
 covers `*.pomelopenguin.com`. A new game needs no server changes.
 

@@ -20,7 +20,14 @@ import { parseArgs } from 'node:util';
 import { WebSocketServer } from 'ws';
 
 import { isValidCode, normalizeCode, randomCode } from './netplay/codes.js';
-import { LIVENESS_MS, RoomCore, TO_ALL, TO_OTHERS } from './netplay/core.js';
+import {
+	CLOSE_FLOODING,
+	LIVENESS_MS,
+	newConn,
+	RoomCore,
+	TO_OTHERS,
+	TO_SENDER,
+} from './netplay/core.js';
 import { randomSeed } from './netplay/rng.js';
 
 /** @typedef {import('./netplay/core.js').Conn} Conn */
@@ -56,8 +63,7 @@ class Room {
 	 * @returns {Conn}
 	 */
 	attach(ws) {
-		/** @type {Conn} */
-		const conn = { slot: -1, token: '', windowStart: Date.now(), windowCount: 0 };
+		const conn = newConn(Date.now());
 		this.conns.set(ws, conn);
 		this.lastSeen.set(ws, Date.now());
 		return conn;
@@ -81,6 +87,19 @@ class Room {
 	}
 
 	/**
+	 * Hang up on a flooding socket. Mirrors `GameRoom.kick`.
+	 *
+	 * @param {WebSocket} ws
+	 * @param {Conn} conn
+	 */
+	kick(ws, conn) {
+		this.conns.delete(ws);
+		this.lastSeen.delete(ws);
+		this.dispatch(this.core.disconnect(conn), ws);
+		ws.close(CLOSE_FLOODING, 'flooding');
+	}
+
+	/**
 	 * Execute what the core decided. Backpressure policy lives here rather than
 	 * in the core: it depends on the transport's notion of a saturated socket.
 	 *
@@ -92,7 +111,7 @@ class Room {
 			for (const [ws, conn] of this.conns) {
 				if (action.to === TO_OTHERS && ws === sender) continue;
 				if (action.to >= 0 && conn.slot !== action.to) continue;
-				if (action.to !== TO_ALL && action.to !== TO_OTHERS && action.to < 0) continue;
+				if (action.to === TO_SENDER && ws !== sender) continue;
 				if (ws.readyState !== ws.OPEN) continue;
 				// Prefer jumpy over paused: a stale position is worth less than the
 				// fresh one queued behind it, so drop rather than buffer.
@@ -175,16 +194,18 @@ export function startServer(opts = {}) {
 		(/** @type {WebSocket} */ ws, /** @type {any} */ _req, /** @type {Room} */ room) => {
 			room.attach(ws);
 			ws.on('message', (data, isBinary) => {
+				const conn = room.conns.get(ws);
+				if (!conn) return;
 				room.lastSeen.set(ws, Date.now());
 				// Text frames are the keepalive; the DO answers them via
 				// setWebSocketAutoResponse without waking, and we mimic that here.
 				if (!isBinary) {
 					if (String(data) === 'p') ws.send('o');
-					return;
+					else room.core.charge(conn);
+				} else {
+					room.dispatch(room.core.handle(conn, toArrayBuffer(data)), ws);
 				}
-				const conn = room.conns.get(ws);
-				if (!conn) return;
-				room.dispatch(room.core.handle(conn, toArrayBuffer(data)), ws);
+				if (conn.kick) room.kick(ws, conn);
 			});
 			ws.on('close', () => {
 				const conn = room.conns.get(ws);

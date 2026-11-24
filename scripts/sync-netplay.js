@@ -15,7 +15,8 @@
  *                        `npm run dev:relay` and the Playwright suite can run a
  *                        real relay locally without the other repo.
  *
- * Source defaults to a sibling checkout at `../pomelo-penguin`; override with
+ * Source defaults to a sibling checkout at `../pomelo-penguin` (the GitHub name)
+ * or `../pomelopenguin.com` (the site name); override with
  * `NETPLAY_REPO=/path/to/pomelo-penguin`. When the source repo isn't there
  * (e.g. CI that only checks out this repo), `--check` warns and passes — the
  * checked-in copies are the build input either way.
@@ -28,8 +29,11 @@
 import { existsSync, mkdirSync, readdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { join, resolve } from 'node:path';
 
-const REPO = resolve(process.env['NETPLAY_REPO'] ?? '../pomelo-penguin');
-const SRC = join(REPO, 'packages/netplay/src');
+const NETPLAY_DIR = 'packages/netplay/src';
+const override = process.env['NETPLAY_REPO'];
+const candidates = override ? [override] : ['../pomelo-penguin', '../pomelopenguin.com'];
+const REPO = resolve(candidates.find((dir) => existsSync(join(dir, NETPLAY_DIR))) ?? candidates[0]);
+const SRC = join(REPO, NETPLAY_DIR);
 const check = process.argv.includes('--check');
 
 const CLIENT_MODULES = [
@@ -56,7 +60,8 @@ const banner = (source) => `// GENERATED FILE — do not edit.
 `;
 
 if (!existsSync(SRC)) {
-	const msg = `sync-netplay: no netplay source at ${SRC} (set NETPLAY_REPO)`;
+	const tried = candidates.map((dir) => resolve(dir, NETPLAY_DIR)).join(' or ');
+	const msg = `sync-netplay: no netplay source at ${tried} (set NETPLAY_REPO)`;
 	if (check) {
 		console.warn(`${msg} — skipping drift check`);
 		process.exit(0);
